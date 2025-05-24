@@ -5,6 +5,15 @@ import os
 
 os.chdir(os.path.dirname(__file__))
 
+def WakeDiscretisation(l, blade_seg, vor_fil):
+    x_fil, y_fil, z_fil = [[np.zeros(blade_seg+1) for i in range(int((vor_fil+1)/2))] for j in range(3)]
+    for j in range(blade_seg+1):
+        for i in range(int((vor_fil+1)/2)):
+            y_fil[i][j] = (b/blade_seg)*j
+            x_fil[i][:] = (l/((vor_fil-1)/2))*i
+    return np.array(x_fil), np.array(y_fil), np.array(z_fil)
+
+
 # Read polar data
 airfoil = 'ARAD8pct_polar.csv'
 data1=pd.read_csv(airfoil, header=0, names = ["alfa", "cl", "cd", "cm"],  sep=',')
@@ -42,22 +51,13 @@ c = 0.2     # chord [m]
 AR = b/c    # aspect ratio  
 
 # Discretisation 
-blade_seg = 2       # no. of segments for the wing
-vor_fil = 3         # no. of vortex filaments
+blade_seg = 4       # no. of segments for the wing
+vor_fil = 5         # no. of vortex filaments
 l = 1               # length of the trailing vortices [m]
 
-l_fil = (2*l + (b/blade_seg))/vor_fil   # length of vortex filament
+# l_fil = (2*l + (b/blade_seg))/vor_fil   # length of vortex filament
 
-# coordinates for filaments
-coord_fil = [[np.zeros(blade_seg+1) for i in range(int((vor_fil+1)/2))] for j in range(int((blade_seg+1)*(vor_fil+1)/2))]
+# coordinates for vortex filaments
+x_fil, y_fil, z_fil = WakeDiscretisation(l, blade_seg, vor_fil)
 
-for k in range(int((blade_seg+1)*(vor_fil+1)/2)):
-    z_fil = 0
-    for j in range(int((vor_fil+1)/2)):
-        y_fil = (b/blade_seg)*j
-        for i in range(blade_seg+1):
-            x_fil = (l/((vor_fil+1)/2))*i
-            coord_fil = 
-
-print(np.array(coord_fil))
-
+print(z_fil)
