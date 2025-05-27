@@ -5,14 +5,103 @@ import os
 
 os.chdir(os.path.dirname(__file__))
 
-def WakeDiscretisation(l, blade_seg, vor_fil):
-    x_fil, y_fil, z_fil = [[np.zeros(blade_seg+1) for i in range(int((vor_fil+1)/2))] for j in range(3)]
+def PrandtlCorrections(Nb, r, R, TSR, a, root_pos_R, tip_pos_R):
+    F_tip = (2/np.pi)*np.arccos(np.exp((-Nb/2)*(((tip_pos_R-(r/R))/(r/R))*(np.sqrt(1 + ((TSR*(r/R))**2)/((1-a)**2))))))
+    F_root = (2/np.pi)*np.arccos(np.exp((-Nb/2)*(((r/R)-(root_pos_R))/(r/R))*(np.sqrt(1 + ((TSR*(r/R))**2)/((1-a)**2)))))  
+    F_tot = F_tip*F_root
+    
+    if(F_tot == 0) or (F_tot is np.nan) or (F_tot is np.inf):
+        # handle exceptional cases for 0/NaN/inf value of F_tot
+        # print("F total is 0/NaN/inf.")
+        F_tot = 0.00001
+
+    return F_tot, F_tip, F_root
+
+def BladeElementMethod(Vinf, TSR, n, rho, b, r, root_pos_R, tip_pos_R, dr, Omega, Nb, a, a_tan, twist, chord, polar_alfa, polar_cl, polar_cd, tol, P_up):
+    flag = 0
+    while True and (flag<1000):
+            V_ax = Vinf*(1+a)       # axial velocity at the propeller blade
+            V_tan = Omega*r*(1-a_tan)   # tangential veloity at the propeller blade
+            V_loc = np.sqrt(V_ax**2 + V_tan**2)
+
+            phi = np.arctan(V_ax/V_tan)     # inflow angle [rad]
+            alfa = twist - np.rad2deg(phi)  # local angle of attack [deg]
+            
+            Cl = np.interp(alfa, polar_alfa, polar_cl)
+            Cd = np.interp(alfa, polar_alfa, polar_cd)
+            
+            C_ax = Cl*np.cos(phi) - Cd*np.sin(phi)      # axial force coefficient
+            F_ax = (0.5*rho*V_loc**2)*C_ax*chord        # axial force [N/m]
+
+            C_tan = Cl*np.sin(phi) + Cd*np.cos(phi)     # tangential force coefficient
+            F_tan = (0.5*rho*V_loc**2)*C_tan*chord      # tangential force [N/m]
+           
+            dCT = (F_ax*Nb*dr)/(rho*(n**2)*(2*b)**4)        # blade element thrust coefficient                   
+            dCQ = (F_tan*Nb*r*dr)/(rho*(n**2)*(2*b)**5)     # blade element torque coefficient
+            dCP = (F_ax*Nb*dr*Vinf)/(rho*(n**3)*(2*b)**5)   # blade element power coefficient
+            
+            a_new = ((1/2)*(-1+np.sqrt(1+(F_ax * Nb / (rho * Vinf**2 * np.pi * r)))))
+            a_tan_new = F_tan * Nb / (2*rho*(2*np.pi*r)*Vinf*(1+a_new)*Omega*r)
+            
+            a_b4_Pr = a_new
+            
+            F_tot, F_tip, F_root = PrandtlCorrections(Nb, r, b, TSR, a, root_pos_R, tip_pos_R)
+            a_new = a_new/F_tot
+            a_tan_new=a_tan_new/F_tot
+        
+            if(np.abs(a-a_new)<tol) and (np.abs(a_tan-a_tan_new)<tol):
+                a = a_new
+                a_tan = a_tan_new
+                flag += 1
+                break
+            else:
+                # introduces relaxation to induction factors a and a' for easier convergence
+                a = 0.75*a + 0.25*a_new
+                a_tan = 0.75*a_tan + 0.25*a_tan_new
+                flag += 1
+                continue
+    P0_down = P_up + F_ax*dr/(2*np.pi*r)
+    return a_b4_Pr, a, a_tan, Cl, Cd, F_ax, F_tan, alfa, phi, F_tot, F_tip, F_root, dCT, dCQ, dCP, P0_down
+
+def BladeSegment(root_pos_R, tip_pos_R, pitch, nodes, seg_type='lin'):
+    if seg_type=='lin':
+        r_R = np.linspace(root_pos_R, tip_pos_R, nodes)
+
+    if seg_type=='cos':
+        theta = np.linspace(0,np.pi, nodes)
+        r_R = (1/2)*(tip_pos_R-root_pos_R)*(1+np.cos(theta)) + root_pos_R
+        r_R = np.flip(r_R)
+        
+    chord_dist = 0.18 - 0.06*(r_R)                  # chord distribution [m]
+    twist_dist = -50*(r_R) + 35 + pitch             # twist distribution [deg]
+
+    return r_R, chord_dist, twist_dist
+
+def WakeDiscretisation(U_wake, r_R, b, l, blade_seg, vor_fil, Omega):
+    T = l/U_wake        # total time for wake propagation [s]
+    dt = T/vor_fil      # time for propagation of each vortex filament [s]    
+    x_fil, y_fil, z_fil = [[np.zeros(blade_seg+1) for i in range(vor_fil+1)] for j in range(3)]
     for j in range(blade_seg+1):
-        for i in range(int((vor_fil+1)/2)):
-            y_fil[i][j] = (b/blade_seg)*j
-            x_fil[i][:] = (l/((vor_fil-1)/2))*i
+        for i in range(vor_fil+1):
+            x_fil[i][j] = U_wake*dt*i
+            y_fil[i][j] = (-1)*r_R[j]*b*np.cos(Omega*dt*i)
+            z_fil[i][j] = r_R[j]*b*np.sin(Omega*dt*i)
+    
     return np.array(x_fil), np.array(y_fil), np.array(z_fil)
 
+def ControlPoint(U_wake, r_R, b, l, blade_seg, vor_fil, Omega):
+    T = l/U_wake        # total time for wake propagation [s]
+    dt = T/vor_fil      # time for propagation of each vortex filament [s]
+    mlt = 0.5           # length normalised distance of control point from origin of blade segment
+    x_cp, y_cp, z_cp = [[np.zeros(blade_seg) for i in range(vor_fil)] for j in range(3)]
+    for j in range(blade_seg):
+        l_seg = (r_R[j+1]-r_R[j])*b
+        for i in range(vor_fil):
+            x_cp[i][j] = U_wake*dt*i                                        # x-coord control point location
+            y_cp[i][j] = (-1)*(l_seg*(j+mlt)+(r_R[0]*b))*np.cos(Omega*dt*i)   # y-coord control point location
+            z_cp[i][j] = (l_seg*(j+mlt)+(r_R[0]*b))*np.sin(Omega*dt*i)        # z-coord control point location
+
+    return np.array(x_cp), np.array(y_cp), np.array(z_cp)
 
 # Read polar data
 airfoil = 'ARAD8pct_polar.csv'
@@ -26,38 +115,60 @@ rho = 1.007                     # density at h=2000m [kg/m^3]
 Pamb = 79495.22                 # static pressure at h=2000m [Pa]
 Vinf = 60                       # velocity [m/s]
 J = np.array([1.6, 2.0, 2.4])   # advance ratio
-'''
-# # Blade geometry
-# R = 0.7                             # Blade radius [m]
-# Nb = 6                              # number of blades
-# tip_pos_R = 1                       # normalised blade tip position (r_tip/R)
-# root_pos_R = 0.25                   # normalised blade root position (r_root/R)
-# pitch = 46                          # blade pitch [deg]
-# 
-# # Discretisation into blade elements
-# nodes = 5
-# r_R = np.linspace(root_pos_R, tip_pos_R, nodes)
-# chord_dist = 0.18 - 0.06*(r_R)                  # chord distribution [m]
-# twist_dist = -50*(r_R) + 35 + pitch             # twist distribution [deg]
 
-# # Dependent variables 
-# n = Vinf/(2*J*R)    # RPS [Hz]
-# Omega = 2*np.pi*n   # Angular velocity [rad/s]
-# TSR = np.pi/J       # tip speed ratio
-'''
-# Wing Geometry
-b = 1       # span [m]
-c = 0.2     # chord [m]
-AR = b/c    # aspect ratio  
+# Blade geometry
+Nb = 6                  # number of blades
+b = 0.7                 # Blade radius [m] (or blade span)
+root_pos_R = 0.25       # normalised blade root position (r_root/R)
+tip_pos_R = 1           # normalised blade tip position (r_tip/R)
+pitch = 46              # blade pitch [deg]
 
 # Discretisation 
-blade_seg = 4       # no. of segments for the wing
+blade_seg = 3       # no. of segments for the wing
 vor_fil = 5         # no. of vortex filaments
-l = 1               # length of the trailing vortices [m]
+l = 3*(2*b)         # length scale of the trailing vortices [m] (based on blade diameter)
+seg_type = 'lin'    # discretisation type- 'lin': linear | 'cos': cosine
 
-# l_fil = (2*l + (b/blade_seg))/vor_fil   # length of vortex filament
+# Discretisation into blade elements
+r_R, chord_dist, twist_dist = BladeSegment(root_pos_R, tip_pos_R, pitch, (blade_seg+1), seg_type)
+
+# Dependent variables 
+n = Vinf/(2*J*b)    # RPS [Hz]
+Omega = 2*np.pi*n   # Angular velocity [rad/s]
+TSR = np.pi/J       # tip speed ratio
+
+# Iteration inputs
+tol = 1e-7  # convergence tolerance
+
+# Variable initialisation
+CT, CP, CQ = [np.zeros(len(J)) for i in range(3)]
+a_b4_Pr, a = [(np.ones((len(J),len(r_R)-1))*(1/3)) for i in range(2)]
+chord, a_tan, Cl, Cd, F_ax, F_tan, dCT, dCQ, dCP, alfa, phi, F_tot, F_tip, F_root, P0_down = [np.zeros((len(J),len(r_R)-1)) for i in range(15)]
+
+P_up = np.ones((len(J),len(r_R)-1))*(Pamb + 0.5*rho*(Vinf**2))  # pressure upwind of rotor [Pa]
+
+# Solving BEM model
+for j in range(len(J)):
+    for i in range(len(r_R)-1):    
+        chord[j][i] = np.interp((r_R[i]+r_R[i+1])/2, r_R, chord_dist) * b
+        twist = np.interp((r_R[i]+r_R[i+1])/2, r_R, twist_dist)
+        
+        r = (r_R[i+1]+r_R[i])*(b/2)     # radial distance of the blade element
+        dr = (r_R[i+1]-r_R[i])*b        # length of the blade element
+        
+        a_b4_Pr[j][i], a[j][i], a_tan[j][i], Cl[j][i], Cd[j][i], F_ax[j][i], F_tan[j][i], alfa[j][i], phi[j][i], F_tot[j][i], F_tip[j][i], F_root[j][i], dCT[j][i], dCQ[j][i], dCP[j][i], P0_down[j][i] = \
+        BladeElementMethod(Vinf, TSR[j], n[j], rho, b, r, root_pos_R, tip_pos_R, dr, Omega[j], Nb, a[j][i], a_tan[j][i], twist, chord[j][i], polar_alfa, polar_cl, polar_cd, tol, P_up[j][i])
+
+        CT[j] += dCT[j][i]    # thrust coefficient for given J
+        CP[j] += dCP[j][i]    # power coefficient for given J
+        CQ[j] += dCQ[j][i]    # torque coefficient for given J
+
+a_rms = np.sqrt(np.mean(np.square(a), axis=1))      # average induction factor for each advance ratio
+U_wake = Vinf*(1+a_rms)                             # wake velocity [m/s]
 
 # coordinates for vortex filaments
-x_fil, y_fil, z_fil = WakeDiscretisation(l, blade_seg, vor_fil)
+for i in range(len(U_wake)):
+    x_fil, y_fil, z_fil = WakeDiscretisation(U_wake[i], r_R, b, l, blade_seg, vor_fil, Omega[i])
+    x_cp, y_cp, z_cp = ControlPoint(U_wake[i], r_R, b, l, blade_seg, vor_fil, Omega[i])
 
-print(z_fil)
+
