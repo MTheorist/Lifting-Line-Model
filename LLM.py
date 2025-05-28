@@ -103,6 +103,28 @@ def ControlPoint(U_wake, r_R, b, l, blade_seg, vor_fil, Omega):
 
     return np.array(x_cp), np.array(y_cp), np.array(z_cp)
 
+
+def filament_induced_velocity(xp,yp,zp,x1,y1,z1,x2,y2,z2,gamma,tol=1e-5):
+    r1 = np.sqrt((xp-x1)**2 + (yp-y1)**2 + (zp-z1)**2)
+    r2 = np.sqrt((xp-x2)**2 + (yp-y2)**2 + (zp-z2)**2)
+    r12x = (yp-y1)*(zp-z2) - (zp-z1)*(yp-y2)
+    r12y = -(xp-x1)*(zp-z2) + (zp-z1)*(xp-x2)
+    r12z = (xp-x1)*(yp-y2) - (yp-y1)*(xp-x2)
+    r12sq = (r12x**2) + (r12y**2) + (r12z**2)
+    if r12sq < tol:
+        return 0.0, 0.0, 0.0
+    r01 = (x2-x1)*(xp-x1) + (y2-y1)*(yp-y1) + (z2-z1)*(zp-z1)
+    r02 = (x2-x1)*(xp-x2) + (y2-y1)*(yp-y2) + (z2-z1)*(zp-z2)
+    K = (gamma/4*np.pi*r12sq)*((r01/r1) - (r02/r2))
+    U = K*r12x
+    V = K*r12y
+    W = K*r12z
+    return U, V, W
+
+
+
+
+
 # Read polar data
 airfoil = 'ARAD8pct_polar.csv'
 data1=pd.read_csv(airfoil, header=0, names = ["alfa", "cl", "cd", "cm"],  sep=',')
