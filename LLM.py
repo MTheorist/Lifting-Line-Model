@@ -105,6 +105,7 @@ def ControlPoint(U_wake, r_R, b, l, blade_seg, vor_fil, Omega):
     return np.array(x_cp), np.array(y_cp), np.array(z_cp)
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 
 def filament_induced_velocity(xp,yp,zp,x1,y1,z1,x2,y2,z2,gamma,tol=1e-5):
     r1 = np.sqrt((xp-x1)**2 + (yp-y1)**2 + (zp-z1)**2)
@@ -127,6 +128,8 @@ def filament_induced_velocity(xp,yp,zp,x1,y1,z1,x2,y2,z2,gamma,tol=1e-5):
 
 
 =======
+=======
+>>>>>>> Stashed changes
 def HorseshoeVortex():
     T = l/U_wake        # total time for wake propagation [s]
     dt = T/vor_fil      # time for propagation of each vortex filament [s]    
@@ -150,6 +153,9 @@ def HorseshoeVortex():
             VF_no += 1
 
         
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 
 # Read polar data
