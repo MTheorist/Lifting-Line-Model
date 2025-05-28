@@ -77,36 +77,115 @@ def BladeSegment(root_pos_R, tip_pos_R, pitch, nodes, seg_type='lin'):
 
     return r_R, chord_dist, twist_dist
 
-def WakeDiscretisation(U_wake, r_R, b, l, blade_seg, vor_fil, Omega):
+# def WakeDiscretisation(U_wake, r_R, b, l, blade_seg, vor_fil, Omega):
+#     T = l/U_wake        # total time for wake propagation [s]
+#     dt = T/vor_fil      # time for propagation of each vortex filament [s]    
+#     x_fil, y_fil, z_fil = [[np.zeros(blade_seg+1) for i in range(vor_fil+1)] for j in range(3)]
+#     for j in range(blade_seg+1):
+#         for i in range(vor_fil+1):
+#             x_fil[i][j] = U_wake*dt*i
+#             y_fil[i][j] = (-1)*r_R[j]*b*np.cos(Omega*dt*i)
+#             z_fil[i][j] = r_R[j]*b*np.sin(Omega*dt*i)
+    
+#     return np.array(x_fil), np.array(y_fil), np.array(z_fil)
+
+# def ControlPoint(U_wake, r_R, b, l, blade_seg, vor_fil, Omega):
+#     T = l/U_wake        # total time for wake propagation [s]
+#     dt = T/vor_fil      # time for propagation of each vortex filament [s]
+#     mlt = 0.5           # length normalised distance of control point from origin of blade segment
+#     x_cp, y_cp, z_cp = [[np.zeros(blade_seg) for i in range(vor_fil)] for j in range(3)]
+#     for j in range(blade_seg):
+#         l_seg = (r_R[j+1]-r_R[j])*b
+#         for i in range(vor_fil):
+#             # x_cp[i][j] = U_wake*dt*i                                        # x-coord control point location
+#             x_cp[i][j] = 1e-5
+#             y_cp[i][j] = (-1)*(l_seg*(j+mlt)+(r_R[0]*b))*np.cos(Omega*dt*i)   # y-coord control point location
+#             z_cp[i][j] = (l_seg*(j+mlt)+(r_R[0]*b))*np.sin(Omega*dt*i)        # z-coord control point location
+
+#     return np.array(x_cp), np.array(y_cp), np.array(z_cp)
+
+def HorseshoeVortex(l, U_wake, vor_fil, blade_seg, Omega, r_R):
     T = l/U_wake        # total time for wake propagation [s]
     dt = T/vor_fil      # time for propagation of each vortex filament [s]    
-    x_fil, y_fil, z_fil = [[np.zeros(blade_seg+1) for i in range(vor_fil+1)] for j in range(3)]
-    for j in range(blade_seg+1):
-        for i in range(vor_fil+1):
-            x_fil[i][j] = U_wake*dt*i
-            y_fil[i][j] = (-1)*r_R[j]*b*np.cos(Omega*dt*i)
-            z_fil[i][j] = r_R[j]*b*np.sin(Omega*dt*i)
-    
-    return np.array(x_fil), np.array(y_fil), np.array(z_fil)
-
-def ControlPoint(U_wake, r_R, b, l, blade_seg, vor_fil, Omega):
-    T = l/U_wake        # total time for wake propagation [s]
-    dt = T/vor_fil      # time for propagation of each vortex filament [s]
-    mlt = 0.5           # length normalised distance of control point from origin of blade segment
-    x_cp, y_cp, z_cp = [[np.zeros(blade_seg) for i in range(vor_fil)] for j in range(3)]
+    HS_vortex = []
     for j in range(blade_seg):
-        l_seg = (r_R[j+1]-r_R[j])*b
-        for i in range(vor_fil):
-            # x_cp[i][j] = U_wake*dt*i                                        # x-coord control point location
-            x_cp[i][j] = 1e-5
-            y_cp[i][j] = (-1)*(l_seg*(j+mlt)+(r_R[0]*b))*np.cos(Omega*dt*i)   # y-coord control point location
-            z_cp[i][j] = (l_seg*(j+mlt)+(r_R[0]*b))*np.sin(Omega*dt*i)        # z-coord control point location
+        start = l
+        fil = vor_fil
+        HS_temp = {}
+        VF_no = 1
+        while start>l/vor_fil:
+            x1 = U_wake*dt*(fil)
+            x2 = U_wake*dt*(fil-1)
+            y1 = (-1)*r_R[j]*b*np.cos(Omega*dt*fil)
+            y2 = (-1)*r_R[j]*b*np.cos(Omega*dt*(fil-1))
+            z1 = r_R[j]*b*np.sin(Omega*dt*fil)
+            z2 = r_R[j]*b*np.sin(Omega*dt*(fil-1))
+            
+            HS_temp['VF'+str(VF_no)]={'pos1': [x1, y1, z1], 'pos2':[x2, y2, z2], 'Gamma': 1}
+            start = start - (l/vor_fil)
+            fil -= 1
+            VF_no += 1
+        
+        x1 = U_wake*dt*(fil)
+        x2 = U_wake*dt*(fil-1)
+        y1 = (-1)*r_R[j]*b
+        y2 = (-1)*r_R[j]*b
+        z1 = 0
+        z2 = 0
+        
+        HS_temp['VF'+str(VF_no)]={'pos1': [x1, y1, z1], 'pos2':[x2, y2, z2], 'Gamma': 1}
+        HS_temp['VF'+str(VF_no-1)]['pos2'] = [x1, y1, z1]
+        start = start - (l/vor_fil)
+        fil -= 1
+        VF_no += 1
 
-    return np.array(x_cp), np.array(y_cp), np.array(z_cp)
+        if start == 0:
+            
+            x1 = 0
+            x2 = 0
+            y1 = (-1)*r_R[j]*b
+            y2 = (-1)*r_R[j+1]*b
+            z1 = 0
+            z2 = 0
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
+            HS_temp['VF'+str(VF_no)]={'pos1': [x1, y1, z1], 'pos2':[x2, y2, z2], 'Gamma': 1}
+        
+        VF_no += 1
 
+        x1 = U_wake*dt*(fil)
+        x2 = U_wake*dt*(fil+1)
+        y1 = (-1)*r_R[j+1]*b
+        y2 = (-1)*r_R[j+1]*b
+        z1 = 0
+        z2 = 0
+        HS_temp['VF'+str(VF_no)]={'pos1': [x1, y1, z1], 'pos2':[x2, y2, z2], 'Gamma': 1}
+        start = start + (l/vor_fil)
+        fil += 1
+        VF_no += 1
+
+        flag = 0
+        while start<l:
+            
+            x1 = U_wake*dt*(fil)
+            x2 = U_wake*dt*(fil+1)
+            y1 = (-1)*r_R[j+1]*b*np.cos(Omega*dt*fil)
+            y2 = (-1)*r_R[j+1]*b*np.cos(Omega*dt*(fil+1))
+            z1 = r_R[j]*b*np.sin(Omega*dt*fil)
+            z2 = r_R[j]*b*np.sin(Omega*dt*(fil+1))
+
+            HS_temp['VF'+str(VF_no)]={'pos1': [x1, y1, z1], 'pos2':[x2, y2, z2], 'Gamma': 1}
+            if flag==0:
+                HS_temp['VF'+str(VF_no)]['pos1'] = HS_temp['VF'+str(VF_no-1)]['pos2']
+                flag = 1
+            
+            start = start + (l/vor_fil)
+            fil += 1
+            VF_no += 1
+        
+        HS_vortex.append(HS_temp)
+
+    return HS_vortex
+            
 def filament_induced_velocity(xp,yp,zp,x1,y1,z1,x2,y2,z2,gamma,tol=1e-5):
     r1 = np.sqrt((xp-x1)**2 + (yp-y1)**2 + (zp-z1)**2)
     r2 = np.sqrt((xp-x2)**2 + (yp-y2)**2 + (zp-z2)**2)
@@ -123,40 +202,6 @@ def filament_induced_velocity(xp,yp,zp,x1,y1,z1,x2,y2,z2,gamma,tol=1e-5):
     V = K*r12y
     W = K*r12z
     return U, V, W
-
-
-
-
-=======
-=======
->>>>>>> Stashed changes
-def HorseshoeVortex():
-    T = l/U_wake        # total time for wake propagation [s]
-    dt = T/vor_fil      # time for propagation of each vortex filament [s]    
-    HS_vortex = []
-    for j in range(blade_seg):
-        start = l
-        fil = vor_fil
-        HS_temp = {}
-        VF_no = 1
-        while start>0:
-            x1 = U_wake*dt*(fil)
-            x2 = U_wake*dt*(fil-1)
-            y1 = (-1)*r_R[j]*b*np.cos(Omega*dt*fil)
-            y2 = (-1)*r_R[j]*b*np.cos(Omega*dt*(fil-1))
-            z1 = r_R[j]*b*np.sin(Omega*dt*fil)
-            z2 = r_R[j]*b*np.sin(Omega*dt*(fil-1))
-
-            HS_temp['VF'+str(VF_no)]={'pos1': [x1, y1, z1], 'pos2':[x2, y2, z2], 'Gamma': 1}
-            start = start - (l/vor_fil)
-            fil -= 1
-            VF_no += 1
-
-        
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 
 # Read polar data
 airfoil = 'ARAD8pct_polar.csv'
@@ -224,7 +269,29 @@ U_wake = Vinf*(1+a_rms)                             # wake velocity [m/s]
 
 # coordinates for vortex filaments
 for i in range(len(U_wake)):
-    x_fil, y_fil, z_fil = WakeDiscretisation(U_wake[i], r_R, b, l, blade_seg, vor_fil, Omega[i])
-    x_cp, y_cp, z_cp = ControlPoint(U_wake[i], r_R, b, l, blade_seg, vor_fil, Omega[i])
+    # x_fil, y_fil, z_fil = WakeDiscretisation(U_wake[i], r_R, b, l, blade_seg, vor_fil, Omega[i])
+    # x_cp, y_cp, z_cp = ControlPoint(U_wake[i], r_R, b, l, blade_seg, vor_fil, Omega[i])
+    HS_vortex = HorseshoeVortex(l, U_wake[i], vor_fil, blade_seg, Omega[i], r_R)
 
-print(x_fil,'\n', y_fil/b,'\n', z_fil/b)
+print(HS_vortex[0])
+hs = HS_vortex[0]                            # dictionary: 'VF1', 'VF2', …
+
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+
+# --- draw one straight line for every vortex filament ----------------------
+# sort the keys numerically so VF1 → VF2 → … keeps the construction order
+for vf_key in sorted(hs, key=lambda k: int(k[2:])):
+    p1 = hs[vf_key]["pos1"]                  # [x1, y1, z1]
+    p2 = hs[vf_key]["pos2"]                  # [x2, y2, z2]
+    ax.plot([p1[0], p2[0]],                  # x-coords
+            [p1[1], p2[1]],                  # y-coords
+            [p1[2], p2[2]])                  # z-coords
+
+# --- cosmetics -------------------------------------------------------------
+ax.set_xlabel("x [m]")
+ax.set_ylabel("y [m]")
+ax.set_zlabel("z [m]")
+ax.set_box_aspect([1, 1, 1])                 # roughly equal axes scales
+plt.tight_layout()
+plt.show()
