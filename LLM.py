@@ -97,12 +97,14 @@ def ControlPoint(U_wake, r_R, b, l, blade_seg, vor_fil, Omega):
     for j in range(blade_seg):
         l_seg = (r_R[j+1]-r_R[j])*b
         for i in range(vor_fil):
-            x_cp[i][j] = U_wake*dt*i                                        # x-coord control point location
+            # x_cp[i][j] = U_wake*dt*i                                        # x-coord control point location
+            x_cp[i][j] = 1e-5
             y_cp[i][j] = (-1)*(l_seg*(j+mlt)+(r_R[0]*b))*np.cos(Omega*dt*i)   # y-coord control point location
             z_cp[i][j] = (l_seg*(j+mlt)+(r_R[0]*b))*np.sin(Omega*dt*i)        # z-coord control point location
 
     return np.array(x_cp), np.array(y_cp), np.array(z_cp)
 
+<<<<<<< Updated upstream
 
 def filament_induced_velocity(xp,yp,zp,x1,y1,z1,x2,y2,z2,gamma,tol=1e-5):
     r1 = np.sqrt((xp-x1)**2 + (yp-y1)**2 + (zp-z1)**2)
@@ -124,6 +126,31 @@ def filament_induced_velocity(xp,yp,zp,x1,y1,z1,x2,y2,z2,gamma,tol=1e-5):
 
 
 
+=======
+def HorseshoeVortex():
+    T = l/U_wake        # total time for wake propagation [s]
+    dt = T/vor_fil      # time for propagation of each vortex filament [s]    
+    HS_vortex = []
+    for j in range(blade_seg):
+        start = l
+        fil = vor_fil
+        HS_temp = {}
+        VF_no = 1
+        while start>0:
+            x1 = U_wake*dt*(fil)
+            x2 = U_wake*dt*(fil-1)
+            y1 = (-1)*r_R[j]*b*np.cos(Omega*dt*fil)
+            y2 = (-1)*r_R[j]*b*np.cos(Omega*dt*(fil-1))
+            z1 = r_R[j]*b*np.sin(Omega*dt*fil)
+            z2 = r_R[j]*b*np.sin(Omega*dt*(fil-1))
+
+            HS_temp['VF'+str(VF_no)]={'pos1': [x1, y1, z1], 'pos2':[x2, y2, z2], 'Gamma': 1}
+            start = start - (l/vor_fil)
+            fil -= 1
+            VF_no += 1
+
+        
+>>>>>>> Stashed changes
 
 # Read polar data
 airfoil = 'ARAD8pct_polar.csv'
@@ -136,7 +163,8 @@ polar_cd = data1['cd'][:]
 rho = 1.007                     # density at h=2000m [kg/m^3]
 Pamb = 79495.22                 # static pressure at h=2000m [Pa]
 Vinf = 60                       # velocity [m/s]
-J = np.array([1.6, 2.0, 2.4])   # advance ratio
+# J = np.array([1.6, 2.0, 2.4])   # advance ratio
+J = np.array([2.0])
 
 # Blade geometry
 Nb = 6                  # number of blades
@@ -193,4 +221,4 @@ for i in range(len(U_wake)):
     x_fil, y_fil, z_fil = WakeDiscretisation(U_wake[i], r_R, b, l, blade_seg, vor_fil, Omega[i])
     x_cp, y_cp, z_cp = ControlPoint(U_wake[i], r_R, b, l, blade_seg, vor_fil, Omega[i])
 
-
+print(x_fil,'\n', y_fil/b,'\n', z_fil/b)
