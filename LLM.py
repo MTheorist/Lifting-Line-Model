@@ -94,6 +94,7 @@ def BladeSegment(root_pos_R, tip_pos_R, pitch, nodes, seg_type='lin'):
 
     return r_R, chord_dist, twist_dist
 
+'''
 def WakeDiscretisation(U_wake, r_R, b, l, blade_seg, vor_fil, Omega):
     T = l/U_wake        # total time for wake propagation [s]
     dt = T/vor_fil      # time for propagation of each vortex filament [s]    
@@ -105,6 +106,7 @@ def WakeDiscretisation(U_wake, r_R, b, l, blade_seg, vor_fil, Omega):
             z_fil[i][j] = r_R[j]*b*np.sin(Omega*dt*i)
     
     return np.array(x_fil), np.array(y_fil), np.array(z_fil)
+'''
 
 def ControlPoint(U_wake, r_R, b, l, blade_seg, vor_fil, Omega):
     T = l/U_wake        # total time for wake propagation [s]
@@ -120,88 +122,6 @@ def ControlPoint(U_wake, r_R, b, l, blade_seg, vor_fil, Omega):
             z_cp[i][j] = (l_seg*(j+mlt)+(r_R[0]*b))*np.sin(Omega*dt*i)        # z-coord control point location
 
     return np.array(x_cp), np.array(y_cp), np.array(z_cp)
-
-def HorseshoeVortex1(l, U_wake, vor_fil, blade_seg, Omega, r_R):
-    T = l/U_wake        # total time for wake propagation [s]
-    dt = T/vor_fil      # time for propagation of each vortex filament [s]    
-    HS_vortex = []
-    for j in range(blade_seg):
-        start = l
-        fil = vor_fil
-        HS_temp = {}
-        VF_no = 1
-        while start>l/vor_fil:
-            x1 = U_wake*dt*(fil)
-            x2 = U_wake*dt*(fil-1)
-            y1 = (-1)*r_R[j]*b*np.cos(Omega*dt*fil)
-            y2 = (-1)*r_R[j]*b*np.cos(Omega*dt*(fil-1))
-            z1 = r_R[j]*b*np.sin(Omega*dt*fil)
-            z2 = r_R[j]*b*np.sin(Omega*dt*(fil-1))
-            
-            HS_temp['VF'+str(VF_no)]={'pos1': [x1, y1, z1], 'pos2':[x2, y2, z2], 'Gamma': 1}
-            start = start - (l/vor_fil)
-            fil -= 1
-            VF_no += 1
-        
-        x1 = U_wake*dt*(fil)
-        x2 = U_wake*dt*(fil-1)
-        y1 = (-1)*r_R[j]*b
-        y2 = (-1)*r_R[j]*b
-        z1 = 0
-        z2 = 0
-        
-        HS_temp['VF'+str(VF_no)]={'pos1': [x1, y1, z1], 'pos2':[x2, y2, z2], 'Gamma': 1}
-        HS_temp['VF'+str(VF_no-1)]['pos2'] = [x1, y1, z1]
-        start = start - (l/vor_fil)
-        fil -= 1
-        VF_no += 1
-
-        if start == 0:
-            
-            x1 = 0
-            x2 = 0
-            y1 = (-1)*r_R[j]*b
-            y2 = (-1)*r_R[j+1]*b
-            z1 = 0
-            z2 = 0
-
-            HS_temp['VF'+str(VF_no)]={'pos1': [x1, y1, z1], 'pos2':[x2, y2, z2], 'Gamma': 1}
-        
-        VF_no += 1
-
-        x1 = U_wake*dt*(fil)
-        x2 = U_wake*dt*(fil+1)
-        y1 = (-1)*r_R[j+1]*b
-        y2 = (-1)*r_R[j+1]*b
-        z1 = 0
-        z2 = 0
-        HS_temp['VF'+str(VF_no)]={'pos1': [x1, y1, z1], 'pos2':[x2, y2, z2], 'Gamma': 1}
-        start = start + (l/vor_fil)
-        fil += 1
-        VF_no += 1
-
-        flag = 0
-        while start<l:
-            
-            x1 = U_wake*dt*(fil)
-            x2 = U_wake*dt*(fil+1)
-            y1 = (-1)*r_R[j+1]*b*np.cos(Omega*dt*fil)
-            y2 = (-1)*r_R[j+1]*b*np.cos(Omega*dt*(fil+1))
-            z1 = r_R[j]*b*np.sin(Omega*dt*fil)
-            z2 = r_R[j]*b*np.sin(Omega*dt*(fil+1))
-
-            HS_temp['VF'+str(VF_no)]={'pos1': [x1, y1, z1], 'pos2':[x2, y2, z2], 'Gamma': 1}
-            if flag==0:
-                HS_temp['VF'+str(VF_no)]['pos1'] = HS_temp['VF'+str(VF_no-1)]['pos2']
-                flag = 1
-            
-            start = start + (l/vor_fil)
-            fil += 1
-            VF_no += 1
-        
-        HS_vortex.append(HS_temp)
-
-    return HS_vortex
 
 def HorseshoeVortex(l, U_wake, vor_fil, blade_seg, Omega, r_R):
     T = l/U_wake        # total time for wake propagation [s]
