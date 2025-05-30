@@ -1,7 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D 
 import pandas as pd
 import os
+from itertools import cycle 
 
 os.chdir(os.path.dirname(__file__))
 
@@ -183,12 +185,14 @@ def InfluenceCoeff(HS_vortex, control_points, Nb):
     N_hs = len(HS_vortex)           #number of horseshoe vortices
 
     #Initialising the matrices 
-    u_infl = np.zeros(N_cp,N_hs*Nb)    
-    v_infl = np.zeros(N_cp,N_hs*Nb)
-    w_infl = np.zeros(N_cp,N_hs*Nb)
+    u_infl = np.zeros((N_cp,N_hs*Nb))    
+    v_infl = np.zeros((N_cp,N_hs*Nb))
+    w_infl = np.zeros((N_cp,N_hs*Nb))
 
     for i in range(N_cp):
-        xp, yp, zp = control_points[i]
+        xp = CtrlPts[i]['CP'+str(i+1)][0]
+        yp = CtrlPts[i]['CP'+str(i+1)][1]
+        zp = CtrlPts[i]['CP'+str(i+1)][2] 
 
         for j in range(N_hs):
             hs = HS_vortex[j]
@@ -212,12 +216,12 @@ def InfluenceCoeff(HS_vortex, control_points, Nb):
 
     return u_infl, v_infl, w_infl
 
-def solve_Lifting_Line(HS_vortex, control_points, rotor, polar_alfa, polar_cl, polar_cd, Vinf, Omega, Nb, rho, b, r_R, chord_dist, twist_dist):
+def solve_Lifting_Line(HS_vortex, control_points, polar_alfa, polar_cl, polar_cd, Vinf, Omega, rho, b, r_R, chord_dist, twist_dist, Nb):
     N_cp = len(control_points)      #number of control points
     N_hs = len(HS_vortex)           #number of horseshoe vortices
     
-    gamma = np.zeros(N_cp)
-    gamma_new = np.zeros(N_cp)
+    gamma = np.zeros((N_cp*Nb))
+    gamma_new = np.zeros((N_cp*Nb))
     a_ax_loc = np.zeros(N_cp)
     a_tan_loc = np.zeros(N_cp)
     F_ax_l = np.zeros(N_cp)
@@ -225,7 +229,7 @@ def solve_Lifting_Line(HS_vortex, control_points, rotor, polar_alfa, polar_cl, p
     r_cp = np.zeros(N_cp)
     results = {'r':[], 'a_ax':[], 'a_tan':[], 'F_ax':[], 'F_tan':[], 'Gamma':[], 'iterations':0}
 
-    u_infl, v_infl, w_infl = InfluenceCoeff(HS_vortex, control_points)
+    u_infl, v_infl, w_infl = InfluenceCoeff(HS_vortex, control_points, Nb)
     conv = 1e-6
     max_iter = 1000
     relax = 0.4
@@ -236,14 +240,17 @@ def solve_Lifting_Line(HS_vortex, control_points, rotor, polar_alfa, polar_cl, p
         gamma_old = np.copy(gamma)
         
         for i in range(N_cp):
-            cp = list(control_points[i].values())[0]
-            xp, yp, zp = cp
+            # cp = list(control_points[i].values())[0]
+            # xp, yp, zp = cp
+            xp = CtrlPts[i]['CP'+str(i+1)][0]
+            yp = CtrlPts[i]['CP'+str(i+1)][1]
+            zp = CtrlPts[i]['CP'+str(i+1)][2] 
             r_cp[i] = np.sqrt(yp**2 + zp**2)
 
             # Solving the linear system of equations
-            u_ind = np.sum(u_infl[i,:]*gamma)
-            v_ind = np.sum(v_infl[i,:]*gamma)
-            w_ind = np.sum(w_infl[i,:]*gamma)
+            u_ind = np.sum(np.matmul(u_infl[i,:],gamma))
+            v_ind = np.sum(np.matmul(v_infl[i,:],gamma))
+            w_ind = np.sum(np.matmul(w_infl[i,:],gamma))
 
             # Finding the local velocity components at the control points
             V_ax_local = Vinf + u_ind   
@@ -338,8 +345,8 @@ tip_pos_R = 1           # normalised blade tip position (r_tip/R)
 pitch = 46              # blade pitch [deg]
 
 # Discretisation 
-blade_seg = 2       # no. of segments for the wing
-vor_fil = 2         # no. of vortex filaments
+blade_seg = 3       # no. of segments for the wing
+vor_fil = 4         # no. of vortex filaments
 l = 20*(2*b)         # length scale of the trailing vortices [m] (based on blade diameter)
 seg_type = 'lin'    # discretisation type- 'lin': linear | 'cos': cosine
 
@@ -382,10 +389,43 @@ U_wake = Vinf*(1+a_rms)                             # wake velocity [m/s]
 
 # coordinates for vortex filaments
 for i in range(len(U_wake)):
-    # x_fil, y_fil, z_fil = WakeDiscretisation(U_wake[i], r_R, b, l, blade_seg, vor_fil, Omega[i])
-    # x_cp, y_cp, z_cp = ControlPoint(U_wake[i], r_R, b, l, blade_seg, vor_fil, Omega[i])
+    CtrlPts = ControlPoint(r_R, b, blade_seg)
     HS_vortex = HorseshoeVortex(l, U_wake[i], vor_fil, blade_seg, Omega[i], r_R)
 
 HS_vortex = CoordinateRotation(HS_vortex, blade_seg, Nb)
 
-print(HS_vortex)
+# print(HS_vortex)
+results = solve_Lifting_Line(HS_vortex, CtrlPts, polar_alfa, polar_cl, polar_cd, Vinf, Omega, rho, b, r_R, chord_dist, twist_dist, Nb)
+print(results)
+
+#--------------------------------- Plotting routine ---------------------------------
+# Wake visualization
+fig = plt.figure(figsize=(7, 6))
+ax  = fig.add_subplot(111, projection="3d")
+
+colours = cycle(["tab:blue", "tab:orange", "tab:green",
+                 "tab:red", "tab:purple", "tab:brown",
+                 "tab:pink", "tab:gray", "tab:olive", "tab:cyan"])
+
+for hs in HS_vortex:                               # one dict per blade-segment vortex
+    # ---- gather the nodes in the correct order ----------------------------
+    nodes = []
+    for vf_key in sorted(hs, key=lambda k: int("".join(filter(str.isdigit, k)))):
+        vf = hs[vf_key]
+        if not nodes:                              # first filament → keep its starting point
+            nodes.append(vf["pos1"])
+        nodes.append(vf["pos2"])                   # then every filament’s end point
+
+    nodes = np.array(nodes)                       # shape (N, 3)
+    c = next(colours)
+    ax.plot(nodes[:, 0], nodes[:, 1], nodes[:, 2], color=c)
+
+# ------------- plot cosmetics ----------------------------------------------
+ax.set_xlabel("x  [m]")
+ax.set_ylabel("y  [m]")
+ax.set_zlabel("z  [m]")
+ax.set_box_aspect([1, 1, 1])                       # roughly equal scaling
+ax.set_title("Horseshoe-vortex lattice")
+
+plt.tight_layout()
+plt.show()
