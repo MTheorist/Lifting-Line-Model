@@ -107,8 +107,8 @@ def WakeDiscretisation(U_wake, r_R, b, l, blade_seg, vor_fil, Omega):
     
     return np.array(x_fil), np.array(y_fil), np.array(z_fil)
 '''
-
-def ControlPoint(U_wake, r_R, b, l, blade_seg, vor_fil, Omega):
+'''
+def ControlPoint1(U_wake, r_R, b, l, blade_seg, vor_fil, Omega):
     T = l/U_wake        # total time for wake propagation [s]
     dt = T/vor_fil      # time for propagation of each vortex filament [s]
     mlt = 0.5           # length normalised distance of control point from origin of blade segment
@@ -122,6 +122,19 @@ def ControlPoint(U_wake, r_R, b, l, blade_seg, vor_fil, Omega):
             z_cp[i][j] = (l_seg*(j+mlt)+(r_R[0]*b))*np.sin(Omega*dt*i)        # z-coord control point location
 
     return np.array(x_cp), np.array(y_cp), np.array(z_cp)
+'''
+def ControlPoint(r_R, b, blade_seg):
+    mlt = 0.5       # length normalised distance of control point from origin of blade segment
+
+    CtrlPts = []
+    for j in range(blade_seg):
+        x = 0
+        y = (-1)*((r_R[j]*b)+(r_R[j+1]-r_R[j])*mlt*b)
+        z = 0
+
+        CtrlPts.append({'CP'+str(j+1): [x, y, z]})
+
+    return CtrlPts
 
 def HorseshoeVortex(l, U_wake, vor_fil, blade_seg, Omega, r_R):
     T = l/U_wake        # total time for wake propagation [s]
