@@ -74,7 +74,7 @@ def BladeSegment(root_pos_R, tip_pos_R, pitch, nodes, seg_type='lin'):
         r_R = (1/2)*(tip_pos_R-root_pos_R)*(1+np.cos(theta)) + root_pos_R
         r_R = np.flip(r_R)
         
-    chord_dist = 0.18 - 0.06*(r_R)                  # chord distribution [m]
+    chord_dist = 0.18 - 0.06*(r_R)                  # normalised chord distribution
     twist_dist = -50*(r_R) + 35 + pitch             # twist distribution [deg]
 
     return r_R, chord_dist, twist_dist
@@ -297,7 +297,7 @@ def LiftingLineModel(HS_vortex, CtrlPts, polar_alfa, polar_cl, polar_cd, Vinf, O
 
             # Finding the blade element properties
             r_R_local = r_cp[i]/b
-            chord_local = np.interp(r_R_local, r_R, chord_dist)
+            chord_local = np.interp(r_R_local, r_R, chord_dist) * b
             twist_local = np.interp(r_R_local, r_R, twist_dist)
             alpha_local = twist_local - np.rad2deg(phi_local)
 
@@ -305,7 +305,7 @@ def LiftingLineModel(HS_vortex, CtrlPts, polar_alfa, polar_cl, polar_cd, Vinf, O
             Cd_local = np.interp(alpha_local, polar_alfa, polar_cd)
 
             Lift_loc = 0.5 * rho * (V_local_mag**2) * Cl_local * chord_local
-            Drag_loc = 0.5 * rho * (V_local_mag**2) * Cd_local * chord_local
+            Drag_loc = 0.5 * rho * (V_local_mag**2) * Cd_local * chord_local 
 
             F_ax_loc = Lift_loc * np.cos(phi_local) - Drag_loc * np.sin(phi_local)
             F_tan_loc = Lift_loc * np.sin(phi_local) + Drag_loc * np.cos(phi_local)
@@ -318,9 +318,9 @@ def LiftingLineModel(HS_vortex, CtrlPts, polar_alfa, polar_cl, polar_cd, Vinf, O
             F_ax_l[i] = F_ax_loc
             F_tan_l[i] = F_tan_loc
 
-            dCT[i] = (F_ax_l[i]*Nb*seg_len)/(rho*((Omega/2*np.pi)**2)*(2*b)**4)
-            dCQ[i] = (F_tan_l[i]*Nb*r_cp[i]*seg_len)/(rho*((Omega/2*np.pi)**2)*(2*b)**5)
-            dCP[i] = (F_ax_l[i]*Nb*seg_len*Vinf)/(rho*((Omega/2*np.pi)**3)*(2*b)**5)
+            dCT[i] = (F_ax_l[i]*Nb*seg_len)/(rho*((Omega/(2*np.pi))**2)*(2*b)**4)
+            dCQ[i] = (F_tan_l[i]*Nb*r_cp[i]*seg_len)/(rho*((Omega/(2*np.pi))**2)*(2*b)**5)
+            dCP[i] = (F_ax_l[i]*Nb*seg_len*Vinf)/(rho*((Omega/(2*np.pi))**3)*(2*b)**5)
 
         error = np.max(np.abs(gamma_new-gamma_old))
         if error>conv:
@@ -362,10 +362,10 @@ tip_pos_R = 1           # normalised blade tip position (r_tip/R)
 pitch = 46              # blade pitch [deg]
 
 # Discretisation 
-blade_seg = 7       # no. of segments for the wing
+blade_seg = 10       # no. of segments for the wing
 vor_fil = 150         # no. of vortex filaments
 l = 20*(2*b)         # length scale of the trailing vortices [m] (based on blade diameter)
-seg_type = 'lin'    # discretisation type- 'lin': linear | 'cos': cosine
+seg_type = 'cos'    # discretisation type- 'lin': linear | 'cos': cosine
 
 # Discretisation into blade elements
 r_R, chord_dist, twist_dist = BladeSegment(root_pos_R, tip_pos_R, pitch, (blade_seg+1), seg_type)
