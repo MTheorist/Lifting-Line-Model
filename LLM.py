@@ -65,23 +65,6 @@ def BladeElementMethod(Vinf, TSR, n, rho, b, r, root_pos_R, tip_pos_R, dr, Omega
     P0_down = P_up + F_ax*dr/(2*np.pi*r)
     return a_b4_Pr, a, a_tan, Cl, Cd, F_ax, F_tan, alfa, phi, F_tot, F_tip, F_root, dCT, dCQ, dCP, P0_down
 
-def filament_induced_velocity(xp,yp,zp,x1,y1,z1,x2,y2,z2,gamma,tol=1e-5):
-    r1 = np.sqrt((xp-x1)**2 + (yp-y1)**2 + (zp-z1)**2)
-    r2 = np.sqrt((xp-x2)**2 + (yp-y2)**2 + (zp-z2)**2)
-    r12x = (yp-y1)*(zp-z2) - (zp-z1)*(yp-y2)
-    r12y = -(xp-x1)*(zp-z2) + (zp-z1)*(xp-x2)
-    r12z = (xp-x1)*(yp-y2) - (yp-y1)*(xp-x2)
-    r12sq = (r12x**2) + (r12y**2) + (r12z**2)
-    if r12sq < tol:
-        return 0.0, 0.0, 0.0
-    r01 = (x2-x1)*(xp-x1) + (y2-y1)*(yp-y1) + (z2-z1)*(zp-z1)
-    r02 = (x2-x1)*(xp-x2) + (y2-y1)*(yp-y2) + (z2-z1)*(zp-z2)
-    K = (gamma/4*np.pi*r12sq)*((r01/r1) - (r02/r2))
-    U = K*r12x
-    V = K*r12y
-    W = K*r12z
-    return U, V, W
-
 def BladeSegment(root_pos_R, tip_pos_R, pitch, nodes, seg_type='lin'):
     if seg_type=='lin':
         r_R = np.linspace(root_pos_R, tip_pos_R, nodes)
@@ -180,32 +163,53 @@ def HorseshoeVortex(l, U_wake, vor_fil, blade_seg, Omega, r_R):
     HS_vortex = CorrectOverlapGamma(HS_vortex)
     return HS_vortex
 
+def InducedVelocities(CtrlPts, pos1, pos2, gamma, tol=1e-5):
+    """
+    Function to calculate [u,v,w] induced by a vortex filament defined by [pos1, pos2] on a control point defined by CtrlPts.
+    Input Arguments:-
+        CtrlPts: [xp, yp, zp]; 1D array of control point coordinates
+        pos1: [x1, y1, z1]; 1D array of the start position of the vortex filament
+        pos1: [x2, y2, z2]; 1D array of the end position of the vortex filament
+        gamma: int or float; magnitude of circulation around the filament
+    """
+    r1 = np.sqrt((CtrlPts[0]-pos1[0])**2 + (CtrlPts[1]-pos1[1])**2 + (CtrlPts[2]-pos1[2])**2)
+    r2 = np.sqrt((CtrlPts[0]-pos2[0])**2 + (CtrlPts[1]-pos2[1])**2 + (CtrlPts[2]-pos2[2])**2)
+
+    r12x = (CtrlPts[1]-pos1[1])*(CtrlPts[2]-pos2[2]) - (CtrlPts[2]-pos1[2])*(CtrlPts[1]-pos2[1])
+    r12y = -(CtrlPts[0]-pos1[0])*(CtrlPts[2]-pos2[2]) + (CtrlPts[2]-pos1[2])*(CtrlPts[0]-pos2[0])
+    r12z = (CtrlPts[0]-pos1[0])*(CtrlPts[1]-pos2[1]) - (CtrlPts[1]-pos1[1])*(CtrlPts[0]-pos2[0])
+
+    r12sq = (r12x**2) + (r12y**2) + (r12z**2)
+    if r12sq < tol:
+        return 0.0, 0.0, 0.0
+    
+    r01 = (pos2[0]-pos1[0])*(CtrlPts[0]-pos1[0]) + (pos2[1]-pos1[1])*(CtrlPts[1]-pos1[1]) + (pos2[2]-pos1[1])*(CtrlPts[2]-pos1[1])
+    r02 = (pos2[0]-pos1[0])*(CtrlPts[0]-pos2[0]) + (pos2[1]-pos1[1])*(CtrlPts[1]-pos2[1]) + (pos2[2]-pos1[2])*(CtrlPts[2]-pos2[2])
+    
+    K = (gamma/4*np.pi*r12sq)*((r01/r1) - (r02/r2))
+    U = K*r12x
+    V = K*r12y
+    W = K*r12z
+    return U, V, W
+
 def InfluenceCoeff(HS_vortex, control_points, Nb):
     N_cp = len(control_points)      #number of control points
     N_hs = len(HS_vortex)           #number of horseshoe vortices
 
     #Initialising the matrices 
-    u_infl = np.zeros((N_cp,N_hs*Nb))    
-    v_infl = np.zeros((N_cp,N_hs*Nb))
-    w_infl = np.zeros((N_cp,N_hs*Nb))
+    u_infl = np.zeros((N_cp,N_hs))    
+    v_infl = np.zeros((N_cp,N_hs))
+    w_infl = np.zeros((N_cp,N_hs))
 
     for i in range(N_cp):
-        xp = CtrlPts[i]['CP'+str(i+1)][0]
-        yp = CtrlPts[i]['CP'+str(i+1)][1]
-        zp = CtrlPts[i]['CP'+str(i+1)][2] 
-
         for j in range(N_hs):
             hs = HS_vortex[j]
             u_ind_t = 0
             v_ind_t = 0
             w_ind_t = 0
-
             for vf_key in hs:
                 fil = hs[vf_key]
-                x1, y1, z1 = fil['pos1']
-                x2, y2, z2 = fil['pos2']
-                gamma = fil['Gamma']
-                u_fil, v_fil, w_fil = filament_induced_velocity(xp, yp, zp, x1, y1, z1, x2, y2, z2, gamma)
+                u_fil, v_fil, w_fil = InducedVelocities(CtrlPts[i]['CP'+str(i+1)], fil['pos1'], fil['pos2'], fil['Gamma'])
                 u_ind_t += u_fil
                 v_ind_t += v_fil
                 w_ind_t += w_fil
@@ -216,12 +220,12 @@ def InfluenceCoeff(HS_vortex, control_points, Nb):
 
     return u_infl, v_infl, w_infl
 
-def solve_Lifting_Line(HS_vortex, control_points, polar_alfa, polar_cl, polar_cd, Vinf, Omega, rho, b, r_R, chord_dist, twist_dist, Nb):
+def LiftingLineModel(HS_vortex, control_points, polar_alfa, polar_cl, polar_cd, Vinf, Omega, rho, b, r_R, chord_dist, twist_dist, Nb):
     N_cp = len(control_points)      #number of control points
     N_hs = len(HS_vortex)           #number of horseshoe vortices
     
-    gamma = np.zeros((N_cp*Nb))
-    gamma_new = np.zeros((N_cp*Nb))
+    gamma = np.zeros((N_hs))
+    gamma_new = np.zeros((N_hs))
     a_ax_loc = np.zeros(N_cp)
     a_tan_loc = np.zeros(N_cp)
     F_ax_l = np.zeros(N_cp)
@@ -248,9 +252,9 @@ def solve_Lifting_Line(HS_vortex, control_points, polar_alfa, polar_cl, polar_cd
             r_cp[i] = np.sqrt(yp**2 + zp**2)
 
             # Solving the linear system of equations
-            u_ind = np.sum(np.matmul(u_infl[i,:],gamma))
-            v_ind = np.sum(np.matmul(v_infl[i,:],gamma))
-            w_ind = np.sum(np.matmul(w_infl[i,:],gamma))
+            u_ind = np.dot(u_infl[i],gamma)
+            v_ind = np.dot(v_infl[i],gamma)
+            w_ind = np.dot(w_infl[i],gamma)
 
             # Finding the local velocity components at the control points
             V_ax_local = Vinf + u_ind   
@@ -260,11 +264,13 @@ def solve_Lifting_Line(HS_vortex, control_points, polar_alfa, polar_cl, polar_cd
 
             # Finding the blade element properties
             r_R_local = r_cp[i]/b
-            chord_local = np.interp(r_R_local, r_R[:-1] + np.diff(r_R)/2, chord_dist)*b
-            twist_local = np.interp(r_R_local, r_R[:-1] + np.diff(r_R)/2, twist_dist)
+            chord_local = np.interp(r_R_local, r_R, chord_dist)
+            twist_local = np.interp(r_R_local, r_R, twist_dist)
             alpha_local = twist_local - np.rad2deg(phi_local)
-            Cl_local = np.interp(alpha_local, polar_alfa, polar_cl, fill_value=(polar_cl.iloc[0], polar_cl.iloc[-1]), bounds_error=False)
-            Cd_local = np.interp(alpha_local, polar_alfa, polar_cd, fill_value=(polar_cd.iloc[0], polar_cd.iloc[-1]), bounds_error=False)
+            # Cl_local = np.interp(alpha_local, polar_alfa, polar_cl, fill_value=(polar_cl.iloc[0], polar_cl.iloc[-1]), bounds_error=False)
+            # Cd_local = np.interp(alpha_local, polar_alfa, polar_cd, fill_value=(polar_cd.iloc[0], polar_cd.iloc[-1]), bounds_error=False)
+            Cl_local = np.interp(alpha_local, polar_alfa, polar_cl)
+            Cd_local = np.interp(alpha_local, polar_alfa, polar_cd)
 
             Lift_loc = 0.5 * rho * (V_local_mag**2) * Cl_local * chord_local
             Drag_loc = 0.5 * rho * (V_local_mag**2) * Cd_local * chord_local
@@ -298,7 +304,7 @@ def CoordinateRotation(HS_vortex, blade_seg, Nb):
     HS_base = HS_vortex.copy()
 
     for i in range(1, Nb):
-        theta = (2 * np.pi / Nb) * i
+        theta = (2 * np.pi / Nb) * i    # angular position of blade element
         for j in range(blade_seg):
             HS_temp={}
             for key, VF in HS_base[j].items():
@@ -310,7 +316,7 @@ def CoordinateRotation(HS_vortex, blade_seg, Nb):
                     [1, 0, 0],
                     [0, np.cos(theta), -np.sin(theta)],
                     [0, np.sin(theta),  np.cos(theta)]
-                ])
+                ])                      # transformation matrix
 
                 pos = np.array([x, y, z])
                 pos = R @ pos
@@ -395,7 +401,7 @@ for i in range(len(U_wake)):
 HS_vortex = CoordinateRotation(HS_vortex, blade_seg, Nb)
 
 # print(HS_vortex)
-results = solve_Lifting_Line(HS_vortex, CtrlPts, polar_alfa, polar_cl, polar_cd, Vinf, Omega, rho, b, r_R, chord_dist, twist_dist, Nb)
+results = LiftingLineModel(HS_vortex, CtrlPts, polar_alfa, polar_cl, polar_cd, Vinf, Omega, rho, b, r_R, chord_dist, twist_dist, Nb)
 print(results)
 
 #--------------------------------- Plotting routine ---------------------------------
