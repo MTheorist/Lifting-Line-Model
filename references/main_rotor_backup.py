@@ -20,7 +20,7 @@ class Rotor:
      self.theta_p = GlobalPitch
      self.V_inf = WindSpeedVector
      self.omega = self.TSR*self.V_inf[0]/self.R
-     self.polars = pd.read_excel('polar DU95W180 (3).xlsx',header = 3,names=['alpha','Cl','Cd','Cm'])
+     self.polars = pd.read_csv('ARAD8pct_polar.csv', header=0, names = ["alpha", "Cl", "Cd", "Cm"],  sep=',')
 
   def Polars(self,alpha):
       cl = np.interp(alpha,np.array(self.polars['alpha']),np.array(self.polars['Cl']))
@@ -253,6 +253,7 @@ def LiftingLine(rotor,geometry):
                 v = v + v_ind_mat[i,j]*gamma[j]
                 w = w + w_ind_mat[i,j]*gamma[j]
 
+            print("-----------------------TEST-------------------", u, v, w)
             omega_vec = np.cross([-omega,0,0],coords) #Rotational velocity at point
             # Velocity in x,y,z
             V = [V_inf[0] + u + omega_vec[0], V_inf[1] + v + omega_vec[1], V_inf[2] + w + omega_vec[2]]
@@ -315,47 +316,47 @@ results = LiftingLine(rotor,geometry)
 
 #%%
 
-dt = pd.read_csv('results.txt')
-results_CSF=dt.to_numpy()
+# dt = pd.read_csv('results.txt')
+# results_CSF=dt.to_numpy()
 
 
-plt.figure()
-plt.grid()
-plt.plot(results['r'][0:39]/rotor.R,results['F_ax'][0:39]/(0.5*rotor.V_inf[0]**2*rotor.R), label=r'Fnorm (LL)')
-plt.plot(results_CSF[:,2], results_CSF[:,3]/(0.5*rotor.V_inf[0]**2*rotor.R), label=r'Fnorm (BEM)')
-plt.legend()
-plt.xlabel('r/R')
+# plt.figure()
+# plt.grid()
+# plt.plot(results['r'][0:39]/rotor.R,results['F_ax'][0:39]/(0.5*rotor.V_inf[0]**2*rotor.R), label=r'Fnorm (LL)')
+# plt.plot(results_CSF[:,2], results_CSF[:,3]/(0.5*rotor.V_inf[0]**2*rotor.R), label=r'Fnorm (BEM)')
+# plt.legend()
+# plt.xlabel('r/R')
 
 
-plt.figure()
-plt.grid()
-plt.plot(results['r'][0:39]/rotor.R,results['F_az'][0:39]/(0.5*rotor.V_inf[0]**2*rotor.R), label=r'Ftan (LL)')
-plt.plot(results_CSF[:,2], results_CSF[:,4]/(0.5*rotor.V_inf[0]**2*rotor.R), label=r'Ftan (BEM)')
-plt.legend()
-plt.xlabel('r/R')
+# plt.figure()
+# plt.grid()
+# plt.plot(results['r'][0:39]/rotor.R,results['F_az'][0:39]/(0.5*rotor.V_inf[0]**2*rotor.R), label=r'Ftan (LL)')
+# plt.plot(results_CSF[:,2], results_CSF[:,4]/(0.5*rotor.V_inf[0]**2*rotor.R), label=r'Ftan (BEM)')
+# plt.legend()
+# plt.xlabel('r/R')
 
 
-plt.figure()
-plt.grid()
-plt.plot(results['r'][0:39]/rotor.R,results['a'][0:39], label=r'a (LL)')
-plt.plot(results_CSF[:,2], results_CSF[:,0], label=r'a (BEM)')
-plt.legend()
-plt.xlabel('r/R')
+# plt.figure()
+# plt.grid()
+# plt.plot(results['r'][0:39]/rotor.R,results['a'][0:39], label=r'a (LL)')
+# plt.plot(results_CSF[:,2], results_CSF[:,0], label=r'a (BEM)')
+# plt.legend()
+# plt.xlabel('r/R')
 
-plt.figure()
-plt.grid()
-plt.plot(results['r'][0:39]/rotor.R,results['at'][0:39], label=r'at (LL)')
-plt.plot(results_CSF[:,2], results_CSF[:,1], label=r'at (BEM)')
-plt.legend()
-plt.xlabel('r/R')
+# plt.figure()
+# plt.grid()
+# plt.plot(results['r'][0:39]/rotor.R,results['at'][0:39], label=r'at (LL)')
+# plt.plot(results_CSF[:,2], results_CSF[:,1], label=r'at (BEM)')
+# plt.legend()
+# plt.xlabel('r/R')
 
 
-plt.figure()
-plt.grid()
-plt.plot(results['r'][0:39]/rotor.R,results['Gamma'][0:39]/((m.pi*rotor.V_inf[0]**2/(rotor.N_blades*rotor.omega))), label=r'Gamma (LL)')
-plt.plot(results_CSF[:,2], results_CSF[:,5]/((m.pi*rotor.V_inf[0]**2/(rotor.N_blades*rotor.omega))), label=r'Gamma (BEM)')
-plt.legend()
-plt.xlabel('r/R')
+# plt.figure()
+# plt.grid()
+# plt.plot(results['r'][0:39]/rotor.R,results['Gamma'][0:39]/((m.pi*rotor.V_inf[0]**2/(rotor.N_blades*rotor.omega))), label=r'Gamma (LL)')
+# plt.plot(results_CSF[:,2], results_CSF[:,5]/((m.pi*rotor.V_inf[0]**2/(rotor.N_blades*rotor.omega))), label=r'Gamma (BEM)')
+# plt.legend()
+# plt.xlabel('r/R')
 
 
 

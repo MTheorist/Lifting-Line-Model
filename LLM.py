@@ -85,89 +85,18 @@ def ControlPoint(r_R, b, blade_seg):
     CtrlPts = []
     for j in range(blade_seg):
         x = 1e-6
-        y = (-1)*((r_R[j]*b)+(r_R[j+1]-r_R[j])*mlt*b)
+        y = ((r_R[j]*b)+(r_R[j+1]-r_R[j])*mlt*b)
         z = 0
 
         CtrlPts.append({'CP'+str(j+1): [x, y, z]})
 
     return CtrlPts
 
-def HorseshoeVortex(l, U_wake, vor_fil, blade_seg, Omega, r_R):
-    T = l/U_wake        # total time for wake propagation [s]
-    dt = T/vor_fil      # time for propagation of each vortex filament [s]    
-    rot = False         # vortex filament rotation flag
-    
-    def CorrectOverlapGamma(HS_vortex):
-        for j in range(blade_seg-1):
-            for i in range(vor_fil):
-                HS1_pos1 = HS_vortex[j]['VF'+str((vor_fil+2)+i)]['pos1']
-                HS1_pos2 = HS_vortex[j]['VF'+str((vor_fil+2)+i)]['pos2']
-                HS2_pos1 = HS_vortex[j+1]['VF'+str(vor_fil-i)]['pos1']
-                HS2_pos2 = HS_vortex[j+1]['VF'+str(vor_fil-i)]['pos2']
-
-                if HS1_pos1 == HS2_pos2 and HS1_pos2 == HS2_pos1:
-                    Gamma = np.abs(HS_vortex[j]['VF'+str((vor_fil+2)+i)]['Gamma'] - HS_vortex[j+1]['VF'+str(vor_fil-i)]['Gamma'])
-                    HS_vortex[j]['VF'+str((vor_fil+2)+i)]['Gamma'] = HS_vortex[j+1]['VF'+str(vor_fil-i)]['Gamma'] = Gamma                    
-                    
-                else:
-                    print("Position mismatch during overlap. Check horseshoe vortex coordinate definition.")
-    
-        return HS_vortex
-
-    HS_vortex = []
-    for j in range(blade_seg):
-        TR_left = {}
-        BVor = {}
-        TR_right = {}
-        HS_temp = {}
-        for i in range(vor_fil):
-            # bound vortex coordinates
-            if i == 0:
-                x = [0, 0]
-                y = [(-1)*r_R[j]*b, (-1)*r_R[j+1]*b]
-                z = [0, 0]
-                BVor['VF'+str(vor_fil+1)]={'pos1': [x[0], y[0], z[0]], 'pos2':[x[1], y[1], z[1]], 'Gamma': 1}
-
-            # first set of trailing vortices
-            if rot == False:
-                x = [0, U_wake*dt]
-                y = [(-1)*r_R[j]*b, (-1)*r_R[j+1]*b]
-                z = [0, 0]
-
-                TR_left['VF'+str(vor_fil)] = {'pos1': [x[1], y[0], z[0]], 'pos2':[x[0], y[0], z[0]], 'Gamma': 1}
-                TR_right['VF'+str(vor_fil+2)] = {'pos1': [x[0], y[1], z[1]], 'pos2':[x[1], y[1], z[1]], 'Gamma': 1}
-                rot = True
-            
-            # subsequent set of vortex filaments
-            elif rot == True:
-                # left side of the trailing vortex
-                x = [U_wake*dt*(i+1), U_wake*dt*i]
-                y = [(-1)*r_R[j]*b*np.cos(Omega*dt*(i+1)), (-1)*r_R[j]*b*np.cos(Omega*dt*i)]
-                z = [r_R[j]*b*np.sin(Omega*dt*(i+1)), r_R[j]*b*np.sin(Omega*dt*i)]
-
-                TR_left['VF'+str(vor_fil-i)] = {'pos1': [x[0], y[0], z[0]], 'pos2':TR_left['VF'+str((vor_fil+1)-i)]['pos1'], 'Gamma': 1}
-
-                # right side of the trailing vortex
-                x = [U_wake*dt*(i+1), U_wake*dt*i]
-                y = [(-1)*r_R[j+1]*b*np.cos(Omega*dt*(i+1)), (-1)*r_R[j+1]*b*np.cos(Omega*dt*i)]
-                z = [r_R[j+1]*b*np.sin(Omega*dt*(i+1)), r_R[j+1]*b*np.sin(Omega*dt*i)]
-
-                TR_right['VF'+str((vor_fil+2)+i)] = {'pos1': TR_right['VF'+str((vor_fil+1)+i)]['pos2'], 'pos2':[x[0], y[0], z[0]], 'Gamma': 1}
-            
-        TR_left = dict(reversed(list(TR_left.items())))
-        HS_temp = TR_left | BVor | TR_right
-        HS_vortex.append(HS_temp)   
-        x = y = z = 0
-        rot = False
-    
-    HS_vortex = CorrectOverlapGamma(HS_vortex)
-    return HS_vortex
-
 def CoordinateRotation(HS_vortex, blade_seg, Nb):
     HS_base = HS_vortex.copy()
 
     for i in range(1, Nb):
-        theta = (2 * np.pi / Nb) * i    # angular position of blade element
+        theta = ((2*np.pi)/Nb) * i    # angular position of blade element
         for j in range(blade_seg):
             HS_temp={}
             for key, VF in HS_base[j].items():
@@ -181,13 +110,85 @@ def CoordinateRotation(HS_vortex, blade_seg, Nb):
                     [0, np.sin(theta),  np.cos(theta)]
                 ])                      # transformation matrix
 
-                pos = np.array([x, y, z])
-                pos = R @ pos
+                pos = np.array([x, y, z])                
+                pos = np.dot(R, pos)
 
                 HS_temp[key] = {'pos1': [pos[0][0], pos[1][0], pos[2][0]], 'pos2': [pos[0][1], pos[1][1], pos[2][1]], 'Gamma': VF['Gamma']}
 
             HS_vortex.append(HS_temp)
+    
+    
+    return HS_vortex
 
+def CorrectOverlapGamma(HS_vortex, blade_seg, vor_fil):
+    for j in range(blade_seg-1):
+        for i in range(vor_fil):
+            HS1_pos1 = HS_vortex[j]['VF'+str((vor_fil+2)+i)]['pos1']
+            HS1_pos2 = HS_vortex[j]['VF'+str((vor_fil+2)+i)]['pos2']
+            HS2_pos1 = HS_vortex[j+1]['VF'+str(vor_fil-i)]['pos1']
+            HS2_pos2 = HS_vortex[j+1]['VF'+str(vor_fil-i)]['pos2']
+
+            if HS1_pos1 == HS2_pos2 and HS1_pos2 == HS2_pos1:
+                Gamma_corr = HS_vortex[j]['VF'+str((vor_fil+2)+i)]['Gamma'] - HS_vortex[j+1]['VF'+str(vor_fil-i)]['Gamma']
+                HS_vortex[j]['VF'+str((vor_fil+2)+i)]['Gamma'] = HS_vortex[j+1]['VF'+str(vor_fil-i)]['Gamma'] = Gamma_corr                   
+            else:
+                print("Position mismatch during overlap. Check horseshoe vortex coordinate definition.")
+
+    return HS_vortex
+
+def HorseshoeVortex(l, U_wake, vor_fil, blade_seg, Omega, r_R, Gamma, Nb):
+    T = l/U_wake        # total time for wake propagation [s]
+    dt = T/vor_fil      # time for propagation of each vortex filament [s]    
+    rot = False         # vortex filament rotation flag
+    
+    HS_vortex = []
+    for j in range(blade_seg):
+        TR_left = {}
+        BVor = {}
+        TR_right = {}
+        HS_temp = {}
+        for i in range(vor_fil):
+            # bound vortex coordinates
+            if i == 0:
+                x = [0, 0]
+                y = [(-1)*r_R[j]*b, (-1)*r_R[j+1]*b]
+                z = [0, 0]
+                BVor['VF'+str(vor_fil+1)]={'pos1': [x[0], y[0], z[0]], 'pos2':[x[1], y[1], z[1]], 'Gamma': Gamma[j]}
+
+            # first set of trailing vortices
+            if rot == False:
+                x = [0, U_wake*dt]
+                y = [(-1)*r_R[j]*b, (-1)*r_R[j+1]*b]
+                z = [0, 0]
+
+                TR_left['VF'+str(vor_fil)] = {'pos1': [x[1], y[0], z[0]], 'pos2':[x[0], y[0], z[0]], 'Gamma': Gamma[j]}
+                TR_right['VF'+str(vor_fil+2)] = {'pos1': [x[0], y[1], z[1]], 'pos2':[x[1], y[1], z[1]], 'Gamma': Gamma[j]}
+                rot = True
+            
+            # subsequent set of vortex filaments
+            elif rot == True:
+                # left side of the trailing vortex
+                x = [U_wake*dt*(i+1), U_wake*dt*i]
+                y = [(-1)*r_R[j]*b*np.cos(Omega*dt*(i+1)), (-1)*r_R[j]*b*np.cos(Omega*dt*i)]
+                z = [r_R[j]*b*np.sin(Omega*dt*(i+1)), r_R[j]*b*np.sin(Omega*dt*i)]
+
+                TR_left['VF'+str(vor_fil-i)] = {'pos1': [x[0], y[0], z[0]], 'pos2':TR_left['VF'+str((vor_fil+1)-i)]['pos1'], 'Gamma': Gamma[j]}
+
+                # right side of the trailing vortex
+                x = [U_wake*dt*(i+1), U_wake*dt*i]
+                y = [(-1)*r_R[j+1]*b*np.cos(Omega*dt*(i+1)), (-1)*r_R[j+1]*b*np.cos(Omega*dt*i)]
+                z = [r_R[j+1]*b*np.sin(Omega*dt*(i+1)), r_R[j+1]*b*np.sin(Omega*dt*i)]
+
+                TR_right['VF'+str((vor_fil+2)+i)] = {'pos1': TR_right['VF'+str((vor_fil+1)+i)]['pos2'], 'pos2':[x[0], y[0], z[0]], 'Gamma': Gamma[j]}
+            
+        TR_left = dict(reversed(list(TR_left.items())))
+        HS_temp = TR_left | BVor | TR_right
+        HS_vortex.append(HS_temp)   
+        x = y = z = 0
+        rot = False
+    
+    HS_vortex = CorrectOverlapGamma(HS_vortex, blade_seg, vor_fil)
+    HS_vortex = CoordinateRotation(HS_vortex, blade_seg, Nb)
     return HS_vortex
 
 def InducedVelocities(CtrlPts, pos1, pos2, gamma, tol=1e-5):
@@ -217,6 +218,7 @@ def InducedVelocities(CtrlPts, pos1, pos2, gamma, tol=1e-5):
     U = K*r12x
     V = K*r12y
     W = K*r12z
+
     return U, V, W
 
 def InfluenceCoeff(HS_vortex, CtrlPts, Nb):
@@ -247,7 +249,7 @@ def InfluenceCoeff(HS_vortex, CtrlPts, Nb):
 
     return u_infl, v_infl, w_infl
 
-def LiftingLineModel(HS_vortex, CtrlPts, polar_alfa, polar_cl, polar_cd, Vinf, Omega, rho, b, r_R, chord_dist, twist_dist, Nb):
+def LiftingLineModel(HS_vortex, CtrlPts, polar_alfa, polar_cl, polar_cd, Vinf, Omega, rho, b, r_R, chord_dist, twist_dist, Nb, l, U_wake, vor_fil):
     N_cp = len(CtrlPts)         # number of control points
     N_hs = len(HS_vortex)       # number of horseshoe vortices
     
@@ -264,13 +266,13 @@ def LiftingLineModel(HS_vortex, CtrlPts, polar_alfa, polar_cl, polar_cd, Vinf, O
     results = {'r':[], 'a_ax':[], 'a_tan':[], 'F_ax':[], 'F_tan':[], 'CT': 0.0, 'CQ': 0.0, 'CP': 0.0, 'Gamma':[], 'iterations':0}
 
     u_infl, v_infl, w_infl = InfluenceCoeff(HS_vortex, CtrlPts, Nb)
-    conv = 1e-8
-    max_iter = 1000
-    relax = 0.4
+    conv = 1e-6
+    max_iter = 2000
+    relax = 0.25
     iter = 0
     error = 1000
 
-    while error>conv and iter<max_iter:
+    while error>conv and iter<=max_iter:
         gamma_old = np.copy(gamma)
         
         for i in range(N_cp):
@@ -287,13 +289,14 @@ def LiftingLineModel(HS_vortex, CtrlPts, polar_alfa, polar_cl, polar_cd, Vinf, O
             u_ind = np.dot(u_infl[i],gamma)
             v_ind = np.dot(v_infl[i],gamma)
             w_ind = np.dot(w_infl[i],gamma)
-            
-            print("-------TEST--------::::", u_ind, v_ind, w_ind)
+
+            # print("--------------TEST-------------", u_ind, v_ind, w_ind)
+
             # Finding the local velocity components at the control points
             V_ax_local = Vinf + u_ind   
-            V_tan_local = Omega*r_cp[i] - w_ind
-            V_local_mag = np.sqrt(V_ax_local**2 + V_tan_local**2)
-            phi_local = np.arctan2(V_ax_local, V_tan_local)
+            V_tan_local = (Omega*r_cp[i]) - w_ind
+            V_local_mag = np.sqrt((V_ax_local**2) + (V_tan_local**2))
+            phi_local = np.arctan(V_ax_local/V_tan_local)
 
             # Finding the blade element properties
             r_R_local = r_cp[i]/b
@@ -307,8 +310,8 @@ def LiftingLineModel(HS_vortex, CtrlPts, polar_alfa, polar_cl, polar_cd, Vinf, O
             Lift_loc = 0.5 * rho * (V_local_mag**2) * Cl_local * chord_local
             Drag_loc = 0.5 * rho * (V_local_mag**2) * Cd_local * chord_local 
 
-            F_ax_loc = Lift_loc * np.cos(phi_local) - Drag_loc * np.sin(phi_local)
-            F_tan_loc = Lift_loc * np.sin(phi_local) + Drag_loc * np.cos(phi_local)
+            F_ax_loc = (Lift_loc * np.cos(phi_local)) - (Drag_loc * np.sin(phi_local))
+            F_tan_loc = (Lift_loc * np.sin(phi_local)) + (Drag_loc * np.cos(phi_local))
 
             gamma_new[range(i,N_hs,N_cp)] = 0.5 * V_local_mag * Cl_local * chord_local
 
@@ -323,8 +326,11 @@ def LiftingLineModel(HS_vortex, CtrlPts, polar_alfa, polar_cl, polar_cd, Vinf, O
             dCP[i] = (F_ax_l[i]*Nb*seg_len*Vinf)/(rho*((Omega/(2*np.pi))**3)*(2*b)**5)
 
         error = np.max(np.abs(gamma_new-gamma_old))
-        if error>conv:
-            gamma = gamma_new*relax + (1-relax)*gamma_old
+        if error>conv and iter<=max_iter:
+            print(gamma, iter)
+            gamma = (gamma_new*relax) + ((1-relax)*gamma_old)
+            HS_vortex = HorseshoeVortex(l, U_wake, vor_fil, N_cp, Omega, r_R, gamma, Nb)
+            u_infl, v_infl, w_infl = InfluenceCoeff(HS_vortex, CtrlPts, Nb)
             iter += 1
         else:
             results['r'] = r_cp
@@ -362,9 +368,9 @@ tip_pos_R = 1           # normalised blade tip position (r_tip/R)
 pitch = 46              # blade pitch [deg]
 
 # Discretisation 
-blade_seg = 10       # no. of segments for the wing
-vor_fil = 150         # no. of vortex filaments
-l = 20*(2*b)         # length scale of the trailing vortices [m] (based on blade diameter)
+blade_seg = 10      # no. of segments for the wing
+vor_fil = 150       # no. of vortex filaments
+l = 50*(2*b)        # length scale of the trailing vortices [m] (based on blade diameter)
 seg_type = 'cos'    # discretisation type- 'lin': linear | 'cos': cosine
 
 # Discretisation into blade elements
@@ -404,45 +410,261 @@ for j in range(len(J)):
 a_rms = np.sqrt(np.mean(np.square(a), axis=1))      # average induction factor for each advance ratio
 U_wake = Vinf*(1+a_rms)                             # wake velocity [m/s]
 
-# coordinates for vortex filaments
+CtrlPts, HS_vortex, results = [[] for i in range(3)]
+
+# Solving Lifting Line Model
+Gamma = np.ones(blade_seg)
+
 for i in range(len(U_wake)):
-    CtrlPts = ControlPoint(r_R, b, blade_seg)
-    HS_vortex = HorseshoeVortex(l, U_wake[i], vor_fil, blade_seg, Omega[i], r_R)
+    CtrlPts.append(ControlPoint(r_R, b, blade_seg))
+    HS_vortex.append(HorseshoeVortex(l, U_wake[i], vor_fil, blade_seg, Omega[i], r_R, Gamma, Nb))
+    results.append(LiftingLineModel(HS_vortex[i], CtrlPts[i], polar_alfa, polar_cl, polar_cd, Vinf, Omega[i], rho, b, r_R, chord_dist, twist_dist, Nb, l, U_wake[i], vor_fil))
 
-HS_vortex = CoordinateRotation(HS_vortex, blade_seg, Nb)
+# print(results)
 
-# print(HS_vortex)
-results = LiftingLineModel(HS_vortex, CtrlPts, polar_alfa, polar_cl, polar_cd, Vinf, Omega[0], rho, b, r_R, chord_dist, twist_dist, Nb)
-print(results)
-
+'''
 #--------------------------------- Plotting routine ---------------------------------
 # Wake visualization
-fig = plt.figure(figsize=(7, 6))
-ax  = fig.add_subplot(111, projection="3d")
+# fig = plt.figure(figsize=(7, 6))
+# ax  = fig.add_subplot(111, projection="3d")
 
-colours = cycle(["tab:blue", "tab:orange", "tab:green",
-                 "tab:red", "tab:purple", "tab:brown",
-                 "tab:pink", "tab:gray", "tab:olive", "tab:cyan"])
+# colours = cycle(["tab:blue", "tab:orange", "tab:green",
+#                  "tab:red", "tab:purple", "tab:brown",
+#                  "tab:pink", "tab:gray", "tab:olive", "tab:cyan"])
 
-for hs in HS_vortex:                               # one dict per blade-segment vortex
-    # ---- gather the nodes in the correct order ----------------------------
-    nodes = []
-    for vf_key in sorted(hs, key=lambda k: int("".join(filter(str.isdigit, k)))):
-        vf = hs[vf_key]
-        if not nodes:                              # first filament → keep its starting point
-            nodes.append(vf["pos1"])
-        nodes.append(vf["pos2"])                   # then every filament’s end point
+# for hs in HS_vortex:                               # one dict per blade-segment vortex
+#     # ---- gather the nodes in the correct order ----------------------------
+#     nodes = []
+#     for vf_key in sorted(hs, key=lambda k: int("".join(filter(str.isdigit, k)))):
+#         vf = hs[vf_key]
+#         if not nodes:                              # first filament → keep its starting point
+#             nodes.append(vf["pos1"])
+#         nodes.append(vf["pos2"])                   # then every filament’s end point
 
-    nodes = np.array(nodes)                       # shape (N, 3)
-    c = next(colours)
-    ax.plot(nodes[:, 0], nodes[:, 1], nodes[:, 2], color=c)
+#     nodes = np.array(nodes)                       # shape (N, 3)
+#     c = next(colours)
+#     ax.plot(nodes[:, 0], nodes[:, 1], nodes[:, 2], color=c)
 
-# ------------- plot cosmetics ----------------------------------------------
-ax.set_xlabel("x  [m]")
-ax.set_ylabel("y  [m]")
-ax.set_zlabel("z  [m]")
-ax.set_box_aspect([1, 1, 1])                       # roughly equal scaling
-ax.set_title("Horseshoe-vortex lattice")
+# fs=(8,5)        #size of the plots
+# plt.figure("Wake visualization", figsize= fs)
+# ax.set_xlabel("x  [m]")
+# ax.set_ylabel("y  [m]")
+# ax.set_zlabel("z  [m]")
+# ax.set_box_aspect([1, 1, 1])                       # roughly equal scaling
+# ax.set_title("Horseshoe-vortex lattice")
 
+# plt.tight_layout()
+# plt.show()
+'''
+# Gemini Plotting
+
+#--------------------------------- Plotting routine ---------------------------------
+# Ensure you have the results from both BEM and LLM
+# For BEM, 'r_R' (radial positions) and 'b' (blade radius) are used to get actual radial positions
+radial_positions_bem = (r_R[:-1] + r_R[1:]) / 2 * b # Midpoint of each blade element
+radial_positions_llm = results[0]['r'] # Radial positions from LLM control points
+
+# 1. Radial distribution of the angle of attack
+plt.figure(figsize=(10, 6))
+plt.plot(radial_positions_bem, alfa[0], label='BEM')
+plt.plot(radial_positions_llm, np.interp(radial_positions_llm/b, (r_R[:-1] + r_R[1:]) / 2, alfa[0]), '--', label='LLM (interpolated BEM for comparison)') # You'll need to calculate alfa from LLM results or compare circulation
+plt.xlabel('Radial position (m)')
+plt.ylabel('Angle of attack (degrees)')
+plt.title('Radial Distribution of Angle of Attack')
+plt.grid(True)
+plt.legend()
 plt.tight_layout()
 plt.show()
+
+# 2. Radial distribution of the inflow angle
+plt.figure(figsize=(10, 6))
+plt.plot(radial_positions_bem, np.rad2deg(phi[0]), label='BEM')
+# You'll need to calculate phi from LLM V_ax_local and V_tan_local (or equivalent)
+# For now, let's plot a placeholder or just BEM if LLM inflow angle isn't directly calculated and stored
+plt.xlabel('Radial position (m)')
+plt.ylabel('Inflow angle (degrees)')
+plt.title('Radial Distribution of Inflow Angle')
+plt.grid(True)
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+# 3. Radial distribution of the circulation (Gamma)
+plt.figure(figsize=(10, 6))
+# For LLM, Gamma is directly available in results['Gamma']
+plt.plot(radial_positions_llm, results[0]['Gamma'][0:blade_seg], label='LLM') # Assuming first 'blade_seg' elements of gamma correspond to the first blade
+# For BEM, Circulation (Gamma) = 0.5 * V_local * Cl * chord
+Gamma_bem = 0.5 * np.sqrt((Vinf*(1+a[0]))*2 + (Omega[0]*radial_positions_bem*(1-a_tan[0]))**2) * Cl[0] * chord[0]
+plt.plot(radial_positions_bem, Gamma_bem, label='BEM')
+plt.xlabel('Radial position (m)')
+plt.ylabel('Circulation (m^2/s)')
+plt.title('Radial Distribution of Circulation')
+plt.grid(True)
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+# 4. Radial distribution of the tangential/azimuthal load
+plt.figure(figsize=(10, 6))
+# F_tan is directly available from BEM
+plt.plot(radial_positions_bem, a_tan[0], label='BEM')
+# F_tan is directly available from LLM
+plt.plot(radial_positions_llm, results[0]['a_tan'], label='LLM')
+plt.xlabel('Radial position (m)')
+plt.ylabel('Tangential Load (N/m)')
+plt.title('Radial Distribution of Tangential Induction')
+plt.grid(True)
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+# 5. Radial distribution of the axial load
+plt.figure(figsize=(10, 6))
+# F_ax is directly available from BEM
+plt.plot(radial_positions_bem, a[0], label='BEM')
+# F_ax is directly available from LLM
+plt.plot(radial_positions_llm, results[0]['a_ax'], label='LLM')
+plt.xlabel('Radial position (m)')
+plt.ylabel('Axial Load (N/m)')
+plt.title('Radial Distribution of Axial Induction')
+plt.grid(True)
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+# 6. Total thrust coefficient (CT) and power coefficient (CP)
+# Assuming J is an array and you want to plot CT/CP vs J or for a single J
+# For single J:
+print(f"Total Thrust Coefficient (CT) for J={J[0]}:")
+print(f"BEM: {CT[0]:.4f}")
+print(f"LLM: {results[0]['CT']:.4f}")
+
+print(f"\nTotal Power Coefficient (CP) for J={J[0]}:")
+print(f"BEM: {CP[0]:.4f}")
+print(f"LLM: {results[0]['CP']:.4f}")
+
+# You can create a bar chart to compare CT and CP if you have multiple J values
+# For now, let's just print the values. If you want a plot, specify how you'd like to visualize it.
+
+# Non-dimensioning explanation:
+# print("\n--- Explanation of Non-Dimensioning ---")
+# print("The thrust coefficient (CT) is non-dimensioned by $1/2 \\rho A V_{inf}^2$, where $\\rho$ is air density, $A$ is rotor disk area ($A=\\pi R^2$), and $V_{inf}$ is freestream velocity.")
+# print("In this code, for BEM, it's defined as $dCT = (F_{ax} \\cdot Nb \\cdot dr) / (\\rho \\cdot n^2 \\cdot (2R)^4)$[cite: 11].")
+# print("For LLM, it's defined as $dCT = (F_{ax,l} \\cdot Nb \\cdot seg_{len}) / (\\rho \\cdot (\\Omega/(2\\pi))^2 \\cdot (2R)^4)$[cite: 11].")
+# print("The power coefficient (CP) is non-dimensioned by $1/2 \\rho A V_{inf}^3$.")
+# print("In this code, for BEM, it's defined as $dCP = (F_{ax} \\cdot Nb \\cdot dr \\cdot V_{inf}) / (\\rho \\cdot n^3 \\cdot (2R)^5)$[cite: 11].")
+# print("For LLM, it's defined as $dCP = (F_{ax,l} \\cdot Nb \\cdot seg_{len} \\cdot V_{inf}) / (\\rho \\cdot (\\Omega/(2\\pi))^3 \\cdot (2R)^5)$[cite: 11].")
+# print("The radial position is non-dimensioned by the blade radius $R$.")
+# print("Loads (axial and tangential) are presented as force per unit length (N/m) or similar, which can be non-dimensioned by " \
+# "dynamic pressure and chord length if needed for comparison across different conditions or airfoils.")
+# print("Angle of attack and inflow angle are in degrees for direct interpretation.")
+# print("Circulation is typically presented in physical units (m^2/s) but can be non-dimensioned by $V_{inf} R$ for comparison.")
+
+
+# 7. Plots with explanation of sensitivity of results to choice of:
+#    * assumed convection speed for frozen wake
+#    * discretization of the blade (constant, cosine)
+#    * azimuthal discretization (number of wake segments per rotation)
+#    * length of the wake (number of rotations), including convergence of the solution with wake length
+
+# To generate these plots, you would need to run your LiftingLineModel multiple times
+# with varying parameters. For example, to show sensitivity to convection speed:
+
+# Sensitivity to assumed convection speed for frozen wake
+# (You would need to modify your 'HorseshoeVortex' function or pass U_wake as a variable to LLM)
+# Example of how you would set up such a test:
+# U_wake_test_values = [0.8 * Vinf, Vinf, 1.2 * Vinf] # Example values
+# results_sensitivity_U_wake = {}
+# for uw in U_wake_test_values:
+#     # Re-run LLM with different U_wake. This might require changes to how U_wake is handled in your main loop.
+#     # For this example, we'll assume you already have a mechanism to change it.
+#     # HS_vortex_temp = HorseshoeVortex(l, uw, vor_fil, blade_seg, Omega[0], r_R)
+#     # HS_vortex_temp = CoordinateRotation(HS_vortex_temp, blade_seg, Nb)
+#     # results_sensitivity_U_wake[uw] = LiftingLineModel(HS_vortex_temp, CtrlPts, polar_alfa, polar_cl, polar_cd, Vinf, Omega[0], rho, b, r_R, chord_dist, twist_dist, Nb)
+
+# # Plotting for sensitivity (example for Axial Load)
+# plt.figure(figsize=(10, 6))
+# for uw, res in results_sensitivity_U_wake.items():
+#     plt.plot(res['r'], res['F_ax'], label=f'U_wake = {uw:.2f} m/s')
+# plt.xlabel('Radial position (m)')
+# plt.ylabel('Axial Load (N/m)')
+# plt.title('Sensitivity of Axial Load to Assumed Convection Speed')
+# plt.grid(True)
+# plt.legend()
+# plt.tight_layout()
+# plt.show()
+# print("Discussion: (Explain how changing U_wake affects the results, e.g., higher U_wake leads to less induced velocity and thus different loads/angles).")
+
+# Similarly, for discretization of the blade (seg_type):
+# You would run your initial BladeSegment and then LLM with 'lin' and 'cos'
+# (This is already set up in your code for 'seg_type', so you can just run it twice and plot the comparison.)
+# Example:
+# r_R_lin, chord_dist_lin, twist_dist_lin = BladeSegment(root_pos_R, tip_pos_R, pitch, (blade_seg+1), 'lin')
+# CtrlPts_lin = ControlPoint(r_R_lin, b, blade_seg)
+# HS_vortex_lin = HorseshoeVortex(l, U_wake[0], vor_fil, blade_seg, Omega[0], r_R_lin)
+# HS_vortex_lin = CoordinateRotation(HS_vortex_lin, blade_seg, Nb)
+# results_lin = LiftingLineModel(HS_vortex_lin, CtrlPts_lin, polar_alfa, polar_cl, polar_cd, Vinf, Omega[0], rho, b, r_R_lin, chord_dist_lin, twist_dist_lin, Nb)
+
+# r_R_cos, chord_dist_cos, twist_dist_cos = BladeSegment(root_pos_R, tip_pos_R, pitch, (blade_seg+1), 'cos')
+# CtrlPts_cos = ControlPoint(r_R_cos, b, blade_seg)
+# HS_vortex_cos = HorseshoeVortex(l, U_wake[0], vor_fil, blade_seg, Omega[0], r_R_cos)
+# HS_vortex_cos = CoordinateRotation(HS_vortex_cos, blade_seg, Nb)
+# results_cos = LiftingLineModel(HS_vortex_cos, CtrlPts_cos, polar_alfa, polar_cl, polar_cd, Vinf, Omega[0], rho, b, r_R_cos, chord_dist_cos, twist_dist_cos, Nb)
+
+# plt.figure(figsize=(10, 6))
+# plt.plot(results_lin['r'], results_lin['Gamma'][0:blade_seg], label='Linear Discretization')
+# plt.plot(results_cos['r'], results_cos['Gamma'][0:blade_seg], label='Cosine Discretization')
+# plt.xlabel('Radial position (m)')
+# plt.ylabel('Circulation (m^2/s)')
+# plt.title('Sensitivity of Circulation to Blade Discretization')
+# plt.grid(True)
+# plt.legend()
+# plt.tight_layout()
+# plt.show()
+# print("Discussion: (Explain the differences between linear and cosine discretization, typically cosine clusters points near tip/root for better resolution where gradients are higher).")
+
+# For azimuthal discretization (vor_fil - number of wake segments per rotation):
+# (You would vary 'vor_fil' in your 'HorseshoeVortex' function)
+# Example:
+# vor_fil_test_values = [50, 100, 150, 200]
+# results_sensitivity_vor_fil = {}
+# for vf in vor_fil_test_values:
+#     # HS_vortex_temp = HorseshoeVortex(l, U_wake[0], vf, blade_seg, Omega[0], r_R)
+#     # HS_vortex_temp = CoordinateRotation(HS_vortex_temp, blade_seg, Nb)
+#     # results_sensitivity_vor_fil[vf] = LiftingLineModel(HS_vortex_temp, CtrlPts, polar_alfa, polar_cl, polar_cd, Vinf, Omega[0], rho, b, r_R, chord_dist, twist_dist, Nb)
+
+# plt.figure(figsize=(10, 6))
+# for vf, res in results_sensitivity_vor_fil.items():
+#     plt.plot(res['r'], res['CT'], 'o', label=f'vor_fil = {vf}') # Plotting total CT as a single point per run
+# plt.xlabel('Number of Vortex Filaments (per rotation)')
+# plt.ylabel('Total Thrust Coefficient (CT)')
+# plt.title('Sensitivity of Total CT to Azimuthal Discretization')
+# plt.grid(True)
+# plt.legend()
+# plt.tight_layout()
+# plt.show()
+# print("Discussion: (Explain how increasing azimuthal discretization affects convergence and accuracy, typically more filaments lead to more accurate but computationally expensive results).")
+
+
+# For length of the wake (l - number of rotations):
+# (You would vary 'l' in your 'HorseshoeVortex' function)
+# Example:
+# wake_length_rotations = [5, 10, 20, 30] # Equivalent to l = N_rotations * (2*b)
+# results_sensitivity_wake_length = {}
+# for wl in wake_length_rotations:
+#     # l_current = wl * (2*b)
+#     # HS_vortex_temp = HorseshoeVortex(l_current, U_wake[0], vor_fil, blade_seg, Omega[0], r_R)
+#     # HS_vortex_temp = CoordinateRotation(HS_vortex_temp, blade_seg, Nb)
+#     # results_sensitivity_wake_length[wl] = LiftingLineModel(HS_vortex_temp, CtrlPts, polar_alfa, polar_cl, polar_cd, Vinf, Omega[0], rho, b, r_R, chord_dist, twist_dist, Nb)
+
+# plt.figure(figsize=(10, 6))
+# for wl, res in results_sensitivity_wake_length.items():
+#     plt.plot(res['r'], res['CP'], 'o', label=f'Wake Length = {wl} Rotations') # Plotting total CP as a single point per run
+# plt.xlabel('Number of Rotations in Wake Length')
+# plt.ylabel('Total Power Coefficient (CP)')
+# plt.title('Sensitivity of Total CP to Wake Length and Convergence')
+# plt.grid(True)
+# plt.legend()
+# plt.tight_layout()
+# plt.show()
+# print("Discussion: (Explain how increasing wake length affects the solution, typically it converges after a certain length as the influence diminishes. Also discuss the convergence of the solution with wake length.)")
