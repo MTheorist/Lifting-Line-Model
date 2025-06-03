@@ -186,6 +186,7 @@ def HorseshoeVortex(l, U_wake, vor_fil, blade_seg, Omega, r_R, Gamma, Nb, chord_
 
     return HS_vortex
 
+'''
 def CorrectOverlapVelocity(u_infl, v_infl, w_infl):
     u_infl_temp = np.copy(u_infl)
     v_infl_temp = np.copy(v_infl)
@@ -196,23 +197,6 @@ def CorrectOverlapVelocity(u_infl, v_infl, w_infl):
         w_infl[:,i] = (w_infl_temp[:,i] + w_infl_temp[:,i-1])
 
     return u_infl, v_infl, w_infl
-
-'''
-def CorrectOverlapGamma(HS_vortex, blade_seg, vor_fil):Add commentMore actions
-    for j in range(blade_seg-1):
-        for i in range(vor_fil):
-            HS1_pos1 = HS_vortex[j]['VF'+str((vor_fil+2)+i)]['pos1']
-            HS1_pos2 = HS_vortex[j]['VF'+str((vor_fil+2)+i)]['pos2']
-            HS2_pos1 = HS_vortex[j+1]['VF'+str(vor_fil-i)]['pos1']
-            HS2_pos2 = HS_vortex[j+1]['VF'+str(vor_fil-i)]['pos2']
-
-            if HS1_pos1 == HS2_pos2 and HS1_pos2 == HS2_pos1:
-                Gamma_corr = HS_vortex[j]['VF'+str((vor_fil+2)+i)]['Gamma'] - HS_vortex[j+1]['VF'+str(vor_fil-i)]['Gamma']
-                HS_vortex[j]['VF'+str((vor_fil+2)+i)]['Gamma'] = HS_vortex[j+1]['VF'+str(vor_fil-i)]['Gamma'] = Gamma_corr                   
-            else:
-                print("Position mismatch during overlap. Check horseshoe vortex coordinate definition.")
-
-    return HS_vortex
 '''
 
 def InducedVelocities(CtrlPts, pos1, pos2, gamma, tol=1e-4):
