@@ -143,7 +143,7 @@ def HorseshoeVortex(l, U_wake, vor_fil, blade_seg, Omega, r_R, Gamma, Nb, chord_
                 # x = [(0.25*chord_dist[j]*np.cos(twist_dist[j])), (0.25*chord_dist[j+1]*np.cos(twist_dist[j+1]))]
                 x = [-(0.25*chord_dist[j]*np.cos(twist_dist[j])), -(0.25*chord_dist[j+1]*np.cos(twist_dist[j+1]))]
                 y = [r_R[j]*b, r_R[j+1]*b]
-                z = [(0.25*chord_dist[j]*np.sin(twist_dist[j])), (0.25*chord_dist[j+1]*np.sin(twist_dist[j+1]))]
+                z = [-(0.25*chord_dist[j]*np.sin(twist_dist[j])), -(0.25*chord_dist[j+1]*np.sin(twist_dist[j+1]))]
                 BVor['VF'+str(vor_fil+1)]={'pos1': [x[0], y[0], z[0]], 'pos2':[x[1], y[1], z[1]], 'Gamma': Gamma[j]}
 
             # first set of trailing vortices
@@ -154,8 +154,8 @@ def HorseshoeVortex(l, U_wake, vor_fil, blade_seg, Omega, r_R, Gamma, Nb, chord_
                 y = [r_R[j]*b, r_R[j+1]*b]
                 # z = [[(0.25*chord_dist[j]*np.sin(twist_dist[j])), (0.25*chord_dist[j]*np.sin(twist_dist[j]))], 
                 #      [(0.25*chord_dist[j+1]*np.sin(twist_dist[j+1])), (0.25*chord_dist[j+1]*np.sin(twist_dist[j+1]))]]
-                z = [[-(0.75*chord_dist[j]*np.sin(twist_dist[j])), (0.25*chord_dist[j]*np.sin(twist_dist[j]))],
-                     [(0.25*chord_dist[j+1]*np.sin(twist_dist[j+1])), -(0.75*chord_dist[j+1]*np.sin(twist_dist[j+1]))]]
+                z = [[(0.75*chord_dist[j]*np.sin(twist_dist[j])), -(0.25*chord_dist[j]*np.sin(twist_dist[j]))],
+                     [-(0.25*chord_dist[j+1]*np.sin(twist_dist[j+1])), (0.75*chord_dist[j+1]*np.sin(twist_dist[j+1]))]]
                 TR_left['VF'+str(vor_fil)] = {'pos1': [x[0][0], y[0], z[0][0]], 'pos2':[x[0][1], y[0], z[0][1]], 'Gamma': Gamma[j]}
                 TR_right['VF'+str(vor_fil+2)] = {'pos1': [x[1][0], y[1], z[1][0]], 'pos2':[x[1][1], y[1], z[1][1]], 'Gamma': Gamma[j]}
                 rot = True
@@ -391,7 +391,7 @@ def LiftingLineModel(HS_vortex, CtrlPts, polar_alfa, polar_cl, polar_cd, Vinf, O
         if error>conv and iter<=max_iter:
             print(gamma, iter)
             gamma = (gamma_new*relax) + ((1-relax)*gamma)
-            HS_vortex = HorseshoeVortex(l, (Vinf*(1+a_avg)), vor_fil, N_cp, Omega, r_R, np.ones(N_cp), Nb, chord_dist, twist_dist)
+            HS_vortex = HorseshoeVortex(l, (Vinf*(1+a_avg)), vor_fil, N_cp, -Omega, r_R, np.ones(N_cp), Nb, chord_dist, twist_dist)
             u_infl, v_infl, w_infl = InfluenceCoeff(HS_vortex, CtrlPts, vor_fil, Nb)
             iter += 1
         else:
@@ -425,7 +425,7 @@ Vinf = 60                       # velocity [m/s]
 J = np.array([2.0])
 
 # Blade geometry
-Nb = 6                  # number of blades
+Nb = 2                  # number of blades
 b = 0.7                 # Blade radius [m] (or blade span)
 root_pos_R = 0.25       # normalised blade root position (r_root/R)
 tip_pos_R = 1           # normalised blade tip position (r_tip/R)
@@ -480,7 +480,7 @@ CtrlPts, HS_vortex, results = [[] for i in range(3)]
 
 for i in range(len(U_wake)):
     CtrlPts.append(ControlPoint(r_R, b, blade_seg, chord_dist, np.deg2rad(twist_dist)))
-    HS_vortex.append(HorseshoeVortex(l, U_wake[i], vor_fil, blade_seg, Omega[i], r_R, np.ones(blade_seg), Nb, (chord_dist*b), np.deg2rad(twist_dist)))
+    HS_vortex.append(HorseshoeVortex(l, U_wake[i], vor_fil, blade_seg, -Omega[i], r_R, np.ones(blade_seg), Nb, (chord_dist*b), np.deg2rad(twist_dist)))
     results.append(LiftingLineModel(HS_vortex[i], CtrlPts[i], polar_alfa, polar_cl, polar_cd, Vinf, Omega[i], rho, b, r_R, chord_dist, twist_dist, Nb, l, U_wake[i], vor_fil, Gamma[i]))
 
 
