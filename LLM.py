@@ -253,7 +253,7 @@ def InfluenceCoeff(HS_vortex, CtrlPts, vor_fil, Nb):
 
     return u_infl, v_infl, w_infl
 
-def LiftingLineModel(HS_vortex, CtrlPts, polar_alfa, polar_cl, polar_cd, Vinf, Omega, rho, b, r_R, chord_dist, twist_dist, Nb, l, U_wake, vor_fil, gamma, a_bem, alfa):
+def LiftingLineModel(HS_vortex, CtrlPts, polar_alfa, polar_cl, polar_cd, Vinf, Omega, rho, b, r_R, chord_dist, twist_dist, Nb, l, U_wake, vor_fil, gamma, a_bem):
     N_cp = len(CtrlPts)         # number of control points
     
     gamma_new, alfa, phi, a_ax_loc, a_tan_loc, F_ax_l, F_tan_l, r_cp, dCT, dCQ, dCP, seg_len = [np.zeros(N_cp) for i in range(12)]
@@ -416,6 +416,9 @@ a_avg = np.dot(a, (np.pi*((b*r_R[1:])**2-(b*r_R[:-1])**2)))/(np.pi*((b*r_R[len(r
 r_R, chord_dist, twist_dist = BladeSegment(root_pos_R, tip_pos_R, pitch, (blade_seg+1), seg_type)
 radial_positions_llm = (r_R[:-1] + r_R[1:]) / 2 # Radial positions from LLM control points
 
+U_wake = Vinf*(np.ones(len(a_avg))+a_avg)       # wake velocity [m/s]
+
+
 # Initial guess for gamma using BEM
 Gamma_init = np.zeros((len(J),len(r_R)-1))
 for j in range(len(J)):
@@ -428,8 +431,6 @@ for j in range(len(J)):
         
         Gamma_init[j][i] = BladeElementMethod(Vinf, TSR[j], n[j], rho, b, r, root_pos_R, tip_pos_R, dr, Omega[j], Nb, a[j][i], a_tan[j][i], twist, chord[j][i], polar_alfa, polar_cl, polar_cd, tol, P_up[j][i])[16]
 
-U_wake = Vinf*(np.ones(len(a_avg))+a_avg)       # wake velocity [m/s]
-
 CtrlPts, HS_vortex, results = [[] for i in range(3)]
 
 # Solving Lifting Line Model
@@ -437,8 +438,7 @@ CtrlPts, HS_vortex, results = [[] for i in range(3)]
 for i in range(len(U_wake)):
     CtrlPts.append(ControlPoint(r_R, b, blade_seg, chord_dist, np.deg2rad(twist_dist)))
     HS_vortex.append(HorseshoeVortex(l, U_wake[i], vor_fil, blade_seg, Omega[i], r_R, np.ones(blade_seg), Nb, (chord_dist*b), np.deg2rad(twist_dist), b))
-
-    results.append(LiftingLineModel(HS_vortex[i], CtrlPts[i], polar_alfa, polar_cl, polar_cd, Vinf, Omega[i], rho, b, r_R, chord_dist, twist_dist, Nb, l, U_wake[i], vor_fil, Gamma_init[i], a_avg[i], alfa[i]))
+    results.append(LiftingLineModel(HS_vortex[i], CtrlPts[i], polar_alfa, polar_cl, polar_cd, Vinf, Omega[i], rho, b, r_R, chord_dist, twist_dist, Nb, l, U_wake[i], vor_fil, Gamma_init[i], a_avg[i]))
 
 ### --------------------------------- PLOTTING ROUTINE ---------------------------------
     
@@ -511,7 +511,7 @@ for i in range(len(U_wake)):
     plt.plot(radial_positions_bem, F_tan[i], label='BEM')
     plt.plot(radial_positions_llm, results[i]['F_tan'], label='LLM', marker='o', markersize = 2)
     plt.xlabel('$r/R$')
-    plt.ylabel('$F_{tan}$')
+    plt.ylabel('$F_{tan}$, [N/m]')
     plt.title("Radial distribution of $F_{tan}$ at J = " + str(J[i]))
     plt.grid(True)
     plt.legend()
@@ -521,7 +521,7 @@ for i in range(len(U_wake)):
     plt.plot(radial_positions_bem, F_ax[i], label='BEM')
     plt.plot(radial_positions_llm, results[i]['F_ax'], label='LLM', marker='o', markersize = 2)
     plt.xlabel('$r/R$')
-    plt.ylabel('$F_{ax}$')
+    plt.ylabel('$F_{ax}$, [N/m]')
     plt.title("Radial distribution of $F_{ax}$ at J = " + str(J[i]))
     plt.grid(True)
     plt.legend()
@@ -531,7 +531,7 @@ for i in range(len(U_wake)):
     plt.plot(radial_positions_bem, a[i], label='BEM')
     plt.plot(radial_positions_llm, results[i]['a_ax'], label='LLM', marker='o', markersize = 2)
     plt.xlabel('$r/R$')
-    plt.ylabel('$Axial Induction, a_{ax}$')
+    plt.ylabel('Axial Induction, $a_{ax}$')
     plt.title("Radial distribution of $a_{ax}$ at J = " + str(J[i]))
     plt.grid(True)
     plt.legend()
@@ -541,7 +541,7 @@ for i in range(len(U_wake)):
     plt.plot(radial_positions_bem, a_tan[i], label='BEM')
     plt.plot(radial_positions_llm, results[i]['a_tan'], label='LLM', marker='o', markersize = 2)
     plt.xlabel('$r/R$')
-    plt.ylabel('$Tangential Induction, a_{tan}$')
+    plt.ylabel('Tangential Induction, $a_{tan}$')
     plt.title("Radial distribution of $a_{tan}$ at J = " + str(J[i]))
     plt.grid(True)
     plt.legend()
@@ -592,7 +592,7 @@ for i in range(len(U_wake)):
     plt.figure("Radial distribution of FTAN with varying J")
     plt.plot(radial_positions_llm, results[i]['F_tan'], label=('J = ' + str(J[i])), marker='o', markersize = 2)
     plt.xlabel('$r/R$')
-    plt.ylabel('$F_{tan}$')
+    plt.ylabel('$F_{tan}$, [N/m]')
     plt.title("Radial distribution of $F_{tan}$ with varying J")
     plt.grid(True)
     plt.legend()
@@ -601,7 +601,7 @@ for i in range(len(U_wake)):
     plt.figure("Radial distribution of FAX with varying J")
     plt.plot(radial_positions_llm, results[i]['F_ax'], label=('J = ' + str(J[i])), marker='o', markersize = 2)
     plt.xlabel('$r/R$')
-    plt.ylabel('$F_{ax}$')
+    plt.ylabel('$F_{ax}$, [N/m]')
     plt.title("Radial distribution of $F_{ax}$ with varying J")
     plt.grid(True)
     plt.legend()
@@ -610,7 +610,7 @@ for i in range(len(U_wake)):
     plt.figure("Radial distribution of A with varying J")
     plt.plot(radial_positions_llm, results[i]['a_ax'], label=('J = ' + str(J[i])), marker='o', markersize = 2)
     plt.xlabel('$r/R$')
-    plt.ylabel('$Axial Induction, a_{ax}$')
+    plt.ylabel('Axial Induction, $a_{ax}$')
     plt.title("Radial distribution of $a_{ax}$ with varying J")
     plt.grid(True)
     plt.legend()
@@ -619,9 +619,112 @@ for i in range(len(U_wake)):
     plt.figure("Radial distribution of ATAN with varying J")
     plt.plot(radial_positions_llm, results[i]['a_tan'], label=('J = ' + str(J[i])), marker='o', markersize = 2)
     plt.xlabel('$r/R$')
-    plt.ylabel('$Tangential Induction, a_{tan}$')
-    plt.title("Radial distribution of $a_{tan}$ at J = " + str(J[i]))
+    plt.ylabel('Tangential Induction, $a_{tan}$')
+    plt.title("Radial distribution of $a_{tan}$ with varying J")
     plt.grid(True)
     plt.legend()
 
-    plt.show()
+plt.show()
+
+
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%% SENSITIVITY STUDY %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+a_sens = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]     # to check sensitivity to initial induction factor
+U_wake_sens = Vinf*(np.ones(len(a_sens))+a_sens)
+Omega_sens = (np.pi*Vinf)/(1.6*b)
+
+seg_type_sens = ['lin', 'cos']              # to check sensitivity to blade segmentation type
+
+vor_fil_sens = [10, 20, 50, 100]            # to check sensitivity to number of wake wortex filament
+
+l_sens = np.array([1, 2, 4, 6, 9, 10])*(2*b)          # to check sensitivity to wake length 
+iter = np.zeros(len(l_sens))
+
+CtrlPts, HS_vortex, results = [[] for i in range(3)]
+
+# Discretisation into blade elements for LLM
+r_R, chord_dist, twist_dist = BladeSegment(root_pos_R, tip_pos_R, pitch, (blade_seg+1), seg_type_sens[0])
+radial_positions_llm = (r_R[:-1] + r_R[1:]) / 2 # Radial positions from LLM control points
+
+for i in range(len(l_sens)):
+    CtrlPts.append(ControlPoint(r_R, b, blade_seg, chord_dist, np.deg2rad(twist_dist)))
+    HS_vortex.append(HorseshoeVortex(l_sens[i], U_wake[0], vor_fil_sens[3], blade_seg, Omega_sens, r_R, np.ones(blade_seg), Nb, (chord_dist*b), np.deg2rad(twist_dist), b))
+    results.append(LiftingLineModel(HS_vortex[i], CtrlPts[i], polar_alfa, polar_cl, polar_cd, Vinf, Omega_sens, rho, b, r_R, chord_dist, twist_dist, Nb, l_sens[i], U_wake[0], vor_fil_sens[3], np.ones(blade_seg), a_avg[0]))
+    iter[i] = (results[i]['iterations'])
+## LLM plots for sensitivity study
+
+for i in range(len(l_sens)):
+    lbl = "$l_{wake}$ = " + str(l_sens[i])
+    # 1. Radial distribution of the angle of attack
+    plt.figure("Radial distribution of ALFA")
+    plt.plot(radial_positions_llm, results[i]['alfa'], label=lbl, marker='o', markersize = 2)
+    plt.xlabel('$r/R$')
+    plt.ylabel('$\\alpha$ [deg]')
+    plt.title("Radial distribution of $\\alpha$")
+    plt.grid(True)
+    plt.legend()
+
+    # 2. Radial distribution of the inflow angle
+    plt.figure("Radial distribution of PHI")
+    plt.plot(radial_positions_llm, np.rad2deg(results[i]['phi']), label=lbl, marker='o', markersize = 2)
+    plt.xlabel('$r/R$')
+    plt.ylabel('$\phi$ [deg]')
+    plt.title("Radial distribution of $\phi$")
+    plt.grid(True)
+    plt.legend()
+
+    # 3. Radial distribution of the circulation (Gamma)
+    plt.figure("Radial distribution of GAMMA")
+    plt.plot(radial_positions_llm, results[i]['Gamma'], label=lbl, marker='o', markersize = 2)
+    plt.xlabel('$r/R$')
+    plt.ylabel('$\Gamma$')
+    plt.title("Radial distribution of $\Gamma$")
+    plt.grid(True)
+    plt.legend()
+
+    # 4. Radial distribution of the tangential/azimuthal load
+    plt.figure("Radial distribution of FTAN")
+    plt.plot(radial_positions_llm, results[i]['F_tan'], label=lbl, marker='o', markersize = 2)
+    plt.xlabel('$r/R$')
+    plt.ylabel('$F_{tan}$, [N/m]')
+    plt.title("Radial distribution of $F_{tan}$")
+    plt.grid(True)
+    plt.legend()
+
+    # 5. Radial distribution of the axial load
+    plt.figure("Radial distribution of FAX")
+    plt.plot(radial_positions_llm, results[i]['F_ax'], label=lbl, marker='o', markersize = 2)
+    plt.xlabel('$r/R$')
+    plt.ylabel('$F_{ax}$, [N/m]')
+    plt.title("Radial distribution of $F_{ax}$")
+    plt.grid(True)
+    plt.legend()
+
+    # 6. Radial distribution of the axial induction
+    plt.figure("Radial distribution of A")
+    plt.plot(radial_positions_llm, results[i]['a_ax'], label=lbl, marker='o', markersize = 2)
+    plt.xlabel('$r/R$')
+    plt.ylabel('Axial Induction, $a_{ax}$')
+    plt.title("Radial distribution of $a_{ax}$")
+    plt.grid(True)
+    plt.legend()
+
+    # 7. Radial distribution of the tangential induction
+    plt.figure("Radial distribution of ATAN")
+    plt.plot(radial_positions_llm, results[i]['a_tan'], label=lbl, marker='o', markersize = 2)
+    plt.xlabel('$r/R$')
+    plt.ylabel('Tangential Induction, $a_{tan}$')
+    plt.title("Radial distribution of $a_{tan}$")
+    plt.grid(True)
+    plt.legend()
+
+# 8. Effect of wake length on convergence
+plt.figure("Sensitivity to wake length")
+plt.plot(iter, l_sens, marker='o', markersize = 2)
+plt.xlabel('Iterations')
+plt.ylabel('Wake length, $l_{wake} [m]$')
+plt.title("LLM sensitivity to wake length")
+plt.grid(True)
+plt.legend()
+
+plt.show()
