@@ -184,7 +184,7 @@ def HorseshoeVortex(l, U_wake, vor_fil, blade_seg, Omega, r_R, Gamma, Nb, chord_
 
     return HS_vortex
 
-def InducedVelocities(CtrlPts, pos1, pos2, gamma, tol=5e-6):
+def InducedVelocities(CtrlPts, pos1, pos2, gamma, tol=1e-6):
     """
     Function to calculate [u,v,w] induced by a vortex filament defined by [pos1, pos2] on a control point defined by CtrlPts.
     Input Arguments:-
@@ -208,6 +208,7 @@ def InducedVelocities(CtrlPts, pos1, pos2, gamma, tol=5e-6):
     # use tol = [1e-6, 5e-6] if segmentation is ['lin', 'cos']
     if r12sq < tol:
         r12sq = tol
+        return 0.0, 0.0, 0.0
 
     K = (gamma/(4*np.pi*r12sq))*((r01/r1) - (r02/r2))
     
@@ -260,7 +261,7 @@ def LiftingLineModel(HS_vortex, CtrlPts, polar_alfa, polar_cl, polar_cd, Vinf, O
 
     conv = 1e-6
     max_iter = 1000
-    relax = 0.1     # use 0.3 if segmentation is 'lin'
+    relax = 0.3     # use [0.3, 0.1] if segmentation is ['lin','cos']
     iter = 0
     error = 1e8
 
@@ -366,15 +367,17 @@ pitch = 46              # blade pitch [deg]
 blade_seg = 14      # no. of segments for the wing
 vor_fil = 100       # no. of vortex filaments
 l = 4*(2*b)         # length scale of the trailing vortices [m] (based on blade diameter)
-seg_type = 'cos'    # discretisation type- 'lin': linear | 'cos': cosine
+seg_type = 'lin'    # discretisation type- 'lin': linear | 'cos': cosine
 
 # Dependent variables 
 n = Vinf/(2*J*b)    # RPS [Hz]
 Omega = 2*np.pi*n   # Angular velocity [rad/s]
 TSR = np.pi/J       # tip speed ratio
 
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%% SOLVING FOR BLADE ELEMENT MODEL %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 # Discretisation into blade elements for BEM
-r_R, chord_dist, twist_dist = BladeSegment(root_pos_R, tip_pos_R, pitch, 100, seg_type)
+r_R, chord_dist, twist_dist = BladeSegment(root_pos_R, tip_pos_R, pitch, 100, 'lin')
 radial_positions_bem = (r_R[:-1] + r_R[1:]) / 2 # Midpoint of each blade element
 
 # Iteration inputs
@@ -403,21 +406,37 @@ for j in range(len(J)):
         CP[j] += dCP[j][i]    # power coefficient for given J
         CQ[j] += dCQ[j][i]    # torque coefficient for given J
 
-a_avg = np.dot(a, (np.pi*((b*r_R[1:])**2-(b*r_R[:-1])**2)))/(np.pi*((b*r_R[blade_seg])**2 - (b*r_R[0])**2))
-U_wake = Vinf*(np.ones(len(a_avg))+a_avg)       # wake velocity [m/s]
+a_avg = np.dot(a, (np.pi*((b*r_R[1:])**2-(b*r_R[:-1])**2)))/(np.pi*((b*r_R[len(r_R)-1])**2 - (b*r_R[0])**2))
 
-CtrlPts, HS_vortex, results = [[] for i in range(3)]
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%% SOLVING FOR LIFTING LINE MODEL %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 # Discretisation into blade elements for LLM
 r_R, chord_dist, twist_dist = BladeSegment(root_pos_R, tip_pos_R, pitch, (blade_seg+1), seg_type)
 radial_positions_llm = (r_R[:-1] + r_R[1:]) / 2 # Radial positions from LLM control points
+
+# Initial guess for gamma using BEM
+Gamma_init = np.zeros((len(J),len(r_R)-1))
+for j in range(len(J)):
+    for i in range(len(r_R)-1):    
+        chord[j][i] = np.interp((r_R[i]+r_R[i+1])/2, r_R, chord_dist) * b
+        twist = np.interp((r_R[i]+r_R[i+1])/2, r_R, twist_dist)
+        # print("BEM:", (r_R[i]+r_R[i+1])/2, ":", twist)
+        r = (r_R[i+1]+r_R[i])*(b/2)     # radial distance of the blade element
+        dr = (r_R[i+1]-r_R[i])*b        # length of the blade element
+        
+        Gamma_init[j][i] = BladeElementMethod(Vinf, TSR[j], n[j], rho, b, r, root_pos_R, tip_pos_R, dr, Omega[j], Nb, a[j][i], a_tan[j][i], twist, chord[j][i], polar_alfa, polar_cl, polar_cd, tol, P_up[j][i])[16]
+
+U_wake = Vinf*(np.ones(len(a_avg))+a_avg)       # wake velocity [m/s]
+
+CtrlPts, HS_vortex, results = [[] for i in range(3)]
+
 # Solving Lifting Line Model
 
 for i in range(len(U_wake)):
     CtrlPts.append(ControlPoint(r_R, b, blade_seg, chord_dist, np.deg2rad(twist_dist)))
     HS_vortex.append(HorseshoeVortex(l, U_wake[i], vor_fil, blade_seg, Omega[i], r_R, np.ones(blade_seg), Nb, (chord_dist*b), np.deg2rad(twist_dist), b))
 
-    results.append(LiftingLineModel(HS_vortex[i], CtrlPts[i], polar_alfa, polar_cl, polar_cd, Vinf, Omega[i], rho, b, r_R, chord_dist, twist_dist, Nb, l, U_wake[i], vor_fil, Gamma[i], a_avg[i], alfa[i]))
+    results.append(LiftingLineModel(HS_vortex[i], CtrlPts[i], polar_alfa, polar_cl, polar_cd, Vinf, Omega[i], rho, b, r_R, chord_dist, twist_dist, Nb, l, U_wake[i], vor_fil, Gamma_init[i], a_avg[i], alfa[i]))
 
     ### --------------------------------- PLOTTING ROUTINE ---------------------------------
     
@@ -454,13 +473,13 @@ for i in range(len(U_wake)):
     ax.set_title("Wake Model for $J$ = " + str(J[i]))
     ax.set_box_aspect([1, 0.5, 0.5])
     plt.tight_layout()
-
+    
     # 1. Radial distribution of the angle of attack
     plt.figure("Radial distribution of ALFA at J = " + str(J[i]))
     plt.plot(radial_positions_bem, alfa[i], label='BEM')
     plt.plot(radial_positions_llm, results[i]['alfa'], label='LLM', marker='o', markersize = 2)
     plt.xlabel('$r/R$')
-    plt.ylabel('$\alpha$ [deg]')
+    plt.ylabel('$\\alpha$ [deg]')
     plt.title("Radial distribution of $\\alpha$ at J = " + str(J[i]))
     plt.grid(True)
     plt.legend()
