@@ -84,7 +84,7 @@ def BladeElementMethod(Vinf, TSR, n, rho, b, r, root_pos_R, tip_pos_R, dr, Omega
                 flag += 1
                 continue
     P0_down = P_up + F_ax*dr/(2*np.pi*r)
-    Gamma = 0.5*(Vinf*(1+a))*Cl*chord
+    Gamma = 0.5*V_loc*Cl*chord
     return a_b4_Pr, a, a_tan, Cl, Cd, F_ax, F_tan, alfa, phi, F_tot, F_tip, F_root, dCT, dCQ, dCP, P0_down, Gamma
 
 #----------------------Lifting Line Model----------------------
