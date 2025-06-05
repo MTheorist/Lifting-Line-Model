@@ -5,6 +5,9 @@ import pandas as pd
 import os
 from itertools import cycle 
 
+plt.rc('text', usetex=True) 
+plt.rc('font', family='serif')
+
 os.chdir(os.path.dirname(__file__))
 
 #---------------------Blade Discretisation---------------------
@@ -363,7 +366,7 @@ pitch = 46              # blade pitch [deg]
 blade_seg = 14      # no. of segments for the wing
 vor_fil = 100       # no. of vortex filaments
 l = 4*(2*b)        # length scale of the trailing vortices [m] (based on blade diameter)
-seg_type = 'cos'    # discretisation type- 'lin': linear | 'cos': cosine
+seg_type = 'lin'    # discretisation type- 'lin': linear | 'cos': cosine
 
 # Discretisation into blade elements
 r_R, chord_dist, twist_dist = BladeSegment(root_pos_R, tip_pos_R, pitch, (blade_seg+1), seg_type)
@@ -399,7 +402,6 @@ for j in range(len(J)):
         CP[j] += dCP[j][i]    # power coefficient for given J
         CQ[j] += dCQ[j][i]    # torque coefficient for given J
 
-# a_rms = np.sqrt(np.mean(np.square(a), axis=1))  # average induction factor for each advance ratio
 a_avg = np.dot(a, (np.pi*((b*r_R[1:])**2-(b*r_R[:-1])**2)))/(np.pi*((b*r_R[blade_seg])**2 - (b*r_R[0])**2))
 U_wake = Vinf*(np.ones(len(a_avg))+a_avg)       # wake velocity [m/s]
 
@@ -409,18 +411,21 @@ CtrlPts, HS_vortex, results = [[] for i in range(3)]
 
 for i in range(len(U_wake)):
     CtrlPts.append(ControlPoint(r_R, b, blade_seg, chord_dist, np.deg2rad(twist_dist)))
-    HS_vortex.append(HorseshoeVortex(l, U_wake[i], vor_fil, blade_seg, Omega[i], r_R, np.ones(blade_seg), Nb, (chord_dist*b), np.deg2rad(twist_dist)), b)
-   
-    # Ensure that HS_vortex has been rotated if needed
-    # HS_vortex = CoordinateRotation(HS_vortex, blade_seg, Nb)
+    HS_vortex.append(HorseshoeVortex(l, U_wake[i], vor_fil, blade_seg, Omega[i], r_R, np.ones(blade_seg), Nb, (chord_dist*b), np.deg2rad(twist_dist), b))
 
-    fig = plt.figure(figsize=(8, 6))
+    # results.append(LiftingLineModel(HS_vortex[i], CtrlPts[i], polar_alfa, polar_cl, polar_cd, Vinf, Omega[i], rho, b, r_R, chord_dist, twist_dist, Nb, l, U_wake[i], vor_fil, Gamma[i], a_avg[i], alfa[i]))
+
+    ### --------------------------------- PLOTTING ROUTINE ---------------------------------
+    
+    ## Per advance ratio, J
+ 
+    # Wake Model
+    fig = plt.figure("Wake Model for J = " + str(J[i]))
     ax = fig.add_subplot(111, projection="3d")
     colors = cycle(["tab:blue", "tab:orange", "tab:green", "tab:red", 
                     "tab:purple", "tab:brown", "tab:pink", "tab:gray", 
                     "tab:olive", "tab:cyan"])
 
-    # Unpack and plot all vortex segments
     for blade_idx in range(Nb * blade_seg):
         hs = HS_vortex[i][blade_idx]  # You probably visualized only one advance ratio's wake
         color = next(colors)
@@ -439,92 +444,81 @@ for i in range(len(U_wake)):
         pt = CtrlPts[i][j]['CP'+str(j+1)]
         ax.plot([pt[0]], [pt[1]], [pt[2]], marker='o', markersize=2)
 
-    ax.set_xlabel("x [m]")
-    ax.set_ylabel("y [m]")
-    ax.set_zlabel("z [m]")
-    ax.set_title("Wake visualization (Horseshoe Vortices)")
+    ax.set_xlabel("$x$ [m]")
+    ax.set_ylabel("$y$ [m]")
+    ax.set_zlabel("$z$ [m]")
+    ax.set_title("Wake Model for $J$ = " + str(J[i]))
     ax.set_box_aspect([1, 0.5, 0.5])
     plt.tight_layout()
     plt.show()
+    
+    radial_positions_bem = (r_R[:-1] + r_R[1:]) / 2 # Midpoint of each blade element
+    radial_positions_llm = (r_R[:-1] + r_R[1:]) / 2 # Radial positions from LLM control points
 
-    results.append(LiftingLineModel(HS_vortex[i], CtrlPts[i], polar_alfa, polar_cl, polar_cd, Vinf, Omega[i], rho, b, r_R, chord_dist, twist_dist, Nb, l, U_wake[i], vor_fil, Gamma[i], a_avg[i], alfa[i]))
+    # 1. Radial distribution of the angle of attack
+    plt.figure("Radial distribution of ALFA at J = " + str(J[i]))
+    plt.plot(radial_positions_bem, alfa[i], label='BEM', marker='o')
+    plt.plot(radial_positions_llm, results[i]['alfa'], label='LLM', marker='o')
+    plt.xlabel('$r/R$')
+    plt.ylabel('$\alpha$ (degrees)')
+    plt.title("title")
+    plt.grid(True)
+    plt.legend()
 
-# Gemini Plotting
+    # 2. Radial distribution of the inflow angle
+    plt.figure()
+    plt.plot(radial_positions_bem, np.rad2deg(phi[0]), label='BEM', marker='o')
+    plt.plot(radial_positions_llm, np.rad2deg(results[0]['phi']), label='LLM', marker='o')
+    plt.xlabel('Radial position (m)')
+    plt.ylabel('Inflow angle (degrees)')
+    plt.title('Radial Distribution of Inflow Angle')
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
 
-#--------------------------------- Plotting routine ---------------------------------
-# Ensure you have the results from both BEM and LLM
-# For BEM, 'r_R' (radial positions) and 'b' (blade radius) are used to get actual radial positions
-radial_positions_bem = (r_R[:-1] + r_R[1:]) / 2 * b # Midpoint of each blade element
-radial_positions_llm = (r_R[:-1] + r_R[1:]) / 2 * b # Radial positions from LLM control points
+    # 3. Radial distribution of the circulation (Gamma)
+    plt.figure(figsize=(10, 6))
+    # For BEM, Circulation (Gamma) = 0.5 * V_local * Cl * chord
+    # Gamma_bem = 0.5 * np.sqrt((Vinf*(1+a[0]))*2 + (Omega[0]*radial_positions_bem*(1-a_tan[0]))**2) * Cl[0] * chord[0]
+    plt.plot(radial_positions_bem, Gamma[0], label='BEM', marker='o')
+    # For LLM, Gamma is directly available in results['Gamma']
+    plt.plot(radial_positions_llm, results[0]['Gamma'], label='LLM', marker='o') # Assuming first 'blade_seg' elements of gamma correspond to the first blade
+    plt.xlabel('Radial position (m)')
+    plt.ylabel('Circulation (m^2/s)')
+    plt.title('Radial Distribution of Circulation')
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
 
-# 1. Radial distribution of the angle of attack
-plt.figure(figsize=(10, 6))
-plt.plot(radial_positions_bem, alfa[0], label='BEM', marker='o')
-plt.plot(radial_positions_llm, results[0]['alfa'], label='LLM', marker='o') # You'll need to calculate alfa from LLM results or compare circulation
-plt.xlabel('Radial position (m)')
-plt.ylabel('Angle of attack (degrees)')
-plt.title('Radial Distribution of Angle of Attack')
-plt.grid(True)
-plt.legend()
-plt.tight_layout()
-plt.show()
+    # 4. Radial distribution of the tangential/azimuthal load
+    plt.figure(figsize=(10, 6))
+    # F_tan is directly available from BEM
+    plt.plot(radial_positions_bem, a_tan[0], label='BEM', marker='o')
+    # F_tan is directly available from LLM
+    plt.plot(radial_positions_llm, results[0]['a_tan'], label='LLM', marker='o')
+    plt.xlabel('Radial position (m)')
+    plt.ylabel('Tangential Load (N/m)')
+    plt.title('Radial Distribution of Tangential Induction')
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
 
-# 2. Radial distribution of the inflow angle
-plt.figure(figsize=(10, 6))
-plt.plot(radial_positions_bem, np.rad2deg(phi[0]), label='BEM', marker='o')
-plt.plot(radial_positions_llm, np.rad2deg(results[0]['phi']), label='LLM', marker='o')
-# You'll need to calculate phi from LLM V_ax_local and V_tan_local (or equivalent)
-# For now, let's plot a placeholder or just BEM if LLM inflow angle isn't directly calculated and stored
-plt.xlabel('Radial position (m)')
-plt.ylabel('Inflow angle (degrees)')
-plt.title('Radial Distribution of Inflow Angle')
-plt.grid(True)
-plt.legend()
-plt.tight_layout()
-plt.show()
-
-# 3. Radial distribution of the circulation (Gamma)
-plt.figure(figsize=(10, 6))
-# For BEM, Circulation (Gamma) = 0.5 * V_local * Cl * chord
-# Gamma_bem = 0.5 * np.sqrt((Vinf*(1+a[0]))*2 + (Omega[0]*radial_positions_bem*(1-a_tan[0]))**2) * Cl[0] * chord[0]
-plt.plot(radial_positions_bem, Gamma[0], label='BEM', marker='o')
-# For LLM, Gamma is directly available in results['Gamma']
-plt.plot(radial_positions_llm, results[0]['Gamma'], label='LLM', marker='o') # Assuming first 'blade_seg' elements of gamma correspond to the first blade
-plt.xlabel('Radial position (m)')
-plt.ylabel('Circulation (m^2/s)')
-plt.title('Radial Distribution of Circulation')
-plt.grid(True)
-plt.legend()
-plt.tight_layout()
-plt.show()
-
-# 4. Radial distribution of the tangential/azimuthal load
-plt.figure(figsize=(10, 6))
-# F_tan is directly available from BEM
-plt.plot(radial_positions_bem, a_tan[0], label='BEM', marker='o')
-# F_tan is directly available from LLM
-plt.plot(radial_positions_llm, results[0]['a_tan'], label='LLM', marker='o')
-plt.xlabel('Radial position (m)')
-plt.ylabel('Tangential Load (N/m)')
-plt.title('Radial Distribution of Tangential Induction')
-plt.grid(True)
-plt.legend()
-plt.tight_layout()
-plt.show()
-
-# 5. Radial distribution of the axial load
-plt.figure(figsize=(10, 6))
-# F_ax is directly available from BEM
-plt.plot(radial_positions_bem, a[0], label='BEM', marker='o')
-# F_ax is directly available from LLM
-plt.plot(radial_positions_llm, results[0]['a_ax'], label='LLM', marker='o')
-plt.xlabel('Radial position (m)')
-plt.ylabel('Axial Load (N/m)')
-plt.title('Radial Distribution of Axial Induction')
-plt.grid(True)
-plt.legend()
-plt.tight_layout()
-plt.show()
+    # 5. Radial distribution of the axial load
+    plt.figure(figsize=(10, 6))
+    # F_ax is directly available from BEM
+    plt.plot(radial_positions_bem, a[0], label='BEM', marker='o')
+    # F_ax is directly available from LLM
+    plt.plot(radial_positions_llm, results[0]['a_ax'], label='LLM', marker='o')
+    plt.xlabel('Radial position (m)')
+    plt.ylabel('Axial Load (N/m)')
+    plt.title('Radial Distribution of Axial Induction')
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
 
 # 6. Total thrust coefficient (CT) and power coefficient (CP)
 # Assuming J is an array and you want to plot CT/CP vs J or for a single J
@@ -536,129 +530,3 @@ print(f"LLM: {results[0]['CT']:.4f}")
 print(f"\nTotal Power Coefficient (CP) for J={J[0]}:")
 print(f"BEM: {CP[0]:.4f}")
 print(f"LLM: {results[0]['CP']:.4f}")
-
-# You can create a bar chart to compare CT and CP if you have multiple J values
-# For now, let's just print the values. If you want a plot, specify how you'd like to visualize it.
-
-# Non-dimensioning explanation:
-# print("\n--- Explanation of Non-Dimensioning ---")
-# print("The thrust coefficient (CT) is non-dimensioned by $1/2 \\rho A V_{inf}^2$, where $\\rho$ is air density, $A$ is rotor disk area ($A=\\pi R^2$), and $V_{inf}$ is freestream velocity.")
-# print("In this code, for BEM, it's defined as $dCT = (F_{ax} \\cdot Nb \\cdot dr) / (\\rho \\cdot n^2 \\cdot (2R)^4)$[cite: 11].")
-# print("For LLM, it's defined as $dCT = (F_{ax,l} \\cdot Nb \\cdot seg_{len}) / (\\rho \\cdot (\\Omega/(2\\pi))^2 \\cdot (2R)^4)$[cite: 11].")
-# print("The power coefficient (CP) is non-dimensioned by $1/2 \\rho A V_{inf}^3$.")
-# print("In this code, for BEM, it's defined as $dCP = (F_{ax} \\cdot Nb \\cdot dr \\cdot V_{inf}) / (\\rho \\cdot n^3 \\cdot (2R)^5)$[cite: 11].")
-# print("For LLM, it's defined as $dCP = (F_{ax,l} \\cdot Nb \\cdot seg_{len} \\cdot V_{inf}) / (\\rho \\cdot (\\Omega/(2\\pi))^3 \\cdot (2R)^5)$[cite: 11].")
-# print("The radial position is non-dimensioned by the blade radius $R$.")
-# print("Loads (axial and tangential) are presented as force per unit length (N/m) or similar, which can be non-dimensioned by " \
-# "dynamic pressure and chord length if needed for comparison across different conditions or airfoils.")
-# print("Angle of attack and inflow angle are in degrees for direct interpretation.")
-# print("Circulation is typically presented in physical units (m^2/s) but can be non-dimensioned by $V_{inf} R$ for comparison.")
-
-
-# 7. Plots with explanation of sensitivity of results to choice of:
-#    * assumed convection speed for frozen wake
-#    * discretization of the blade (constant, cosine)
-#    * azimuthal discretization (number of wake segments per rotation)
-#    * length of the wake (number of rotations), including convergence of the solution with wake length
-
-# To generate these plots, you would need to run your LiftingLineModel multiple times
-# with varying parameters. For example, to show sensitivity to convection speed:
-
-# Sensitivity to assumed convection speed for frozen wake
-# (You would need to modify your 'HorseshoeVortex' function or pass U_wake as a variable to LLM)
-# Example of how you would set up such a test:
-# U_wake_test_values = [0.8 * Vinf, Vinf, 1.2 * Vinf] # Example values
-# results_sensitivity_U_wake = {}
-# for uw in U_wake_test_values:
-#     # Re-run LLM with different U_wake. This might require changes to how U_wake is handled in your main loop.
-#     # For this example, we'll assume you already have a mechanism to change it.
-#     # HS_vortex_temp = HorseshoeVortex(l, uw, vor_fil, blade_seg, Omega[0], r_R)
-#     # HS_vortex_temp = CoordinateRotation(HS_vortex_temp, blade_seg, Nb)
-#     # results_sensitivity_U_wake[uw] = LiftingLineModel(HS_vortex_temp, CtrlPts, polar_alfa, polar_cl, polar_cd, Vinf, Omega[0], rho, b, r_R, chord_dist, twist_dist, Nb)
-
-# # Plotting for sensitivity (example for Axial Load)
-# plt.figure(figsize=(10, 6))
-# for uw, res in results_sensitivity_U_wake.items():
-#     plt.plot(res['r'], res['F_ax'], label=f'U_wake = {uw:.2f} m/s')
-# plt.xlabel('Radial position (m)')
-# plt.ylabel('Axial Load (N/m)')
-# plt.title('Sensitivity of Axial Load to Assumed Convection Speed')
-# plt.grid(True)
-# plt.legend()
-# plt.tight_layout()
-# plt.show()
-# print("Discussion: (Explain how changing U_wake affects the results, e.g., higher U_wake leads to less induced velocity and thus different loads/angles).")
-
-# Similarly, for discretization of the blade (seg_type):
-# You would run your initial BladeSegment and then LLM with 'lin' and 'cos'
-# (This is already set up in your code for 'seg_type', so you can just run it twice and plot the comparison.)
-# Example:
-# r_R_lin, chord_dist_lin, twist_dist_lin = BladeSegment(root_pos_R, tip_pos_R, pitch, (blade_seg+1), 'lin')
-# CtrlPts_lin = ControlPoint(r_R_lin, b, blade_seg)
-# HS_vortex_lin = HorseshoeVortex(l, U_wake[0], vor_fil, blade_seg, Omega[0], r_R_lin)
-# HS_vortex_lin = CoordinateRotation(HS_vortex_lin, blade_seg, Nb)
-# results_lin = LiftingLineModel(HS_vortex_lin, CtrlPts_lin, polar_alfa, polar_cl, polar_cd, Vinf, Omega[0], rho, b, r_R_lin, chord_dist_lin, twist_dist_lin, Nb)
-
-# r_R_cos, chord_dist_cos, twist_dist_cos = BladeSegment(root_pos_R, tip_pos_R, pitch, (blade_seg+1), 'cos')
-# CtrlPts_cos = ControlPoint(r_R_cos, b, blade_seg)
-# HS_vortex_cos = HorseshoeVortex(l, U_wake[0], vor_fil, blade_seg, Omega[0], r_R_cos)
-# HS_vortex_cos = CoordinateRotation(HS_vortex_cos, blade_seg, Nb)
-# results_cos = LiftingLineModel(HS_vortex_cos, CtrlPts_cos, polar_alfa, polar_cl, polar_cd, Vinf, Omega[0], rho, b, r_R_cos, chord_dist_cos, twist_dist_cos, Nb)
-
-# plt.figure(figsize=(10, 6))
-# plt.plot(results_lin['r'], results_lin['Gamma'][0:blade_seg], label='Linear Discretization')
-# plt.plot(results_cos['r'], results_cos['Gamma'][0:blade_seg], label='Cosine Discretization')
-# plt.xlabel('Radial position (m)')
-# plt.ylabel('Circulation (m^2/s)')
-# plt.title('Sensitivity of Circulation to Blade Discretization')
-# plt.grid(True)
-# plt.legend()
-# plt.tight_layout()
-# plt.show()
-# print("Discussion: (Explain the differences between linear and cosine discretization, typically cosine clusters points near tip/root for better resolution where gradients are higher).")
-
-# For azimuthal discretization (vor_fil - number of wake segments per rotation):
-# (You would vary 'vor_fil' in your 'HorseshoeVortex' function)
-# Example:
-# vor_fil_test_values = [50, 100, 150, 200]
-# results_sensitivity_vor_fil = {}
-# for vf in vor_fil_test_values:
-#     # HS_vortex_temp = HorseshoeVortex(l, U_wake[0], vf, blade_seg, Omega[0], r_R)
-#     # HS_vortex_temp = CoordinateRotation(HS_vortex_temp, blade_seg, Nb)
-#     # results_sensitivity_vor_fil[vf] = LiftingLineModel(HS_vortex_temp, CtrlPts, polar_alfa, polar_cl, polar_cd, Vinf, Omega[0], rho, b, r_R, chord_dist, twist_dist, Nb)
-
-# plt.figure(figsize=(10, 6))
-# for vf, res in results_sensitivity_vor_fil.items():
-#     plt.plot(res['r'], res['CT'], 'o', label=f'vor_fil = {vf}') # Plotting total CT as a single point per run
-# plt.xlabel('Number of Vortex Filaments (per rotation)')
-# plt.ylabel('Total Thrust Coefficient (CT)')
-# plt.title('Sensitivity of Total CT to Azimuthal Discretization')
-# plt.grid(True)
-# plt.legend()
-# plt.tight_layout()
-# plt.show()
-# print("Discussion: (Explain how increasing azimuthal discretization affects convergence and accuracy, typically more filaments lead to more accurate but computationally expensive results).")
-
-
-# For length of the wake (l - number of rotations):
-# (You would vary 'l' in your 'HorseshoeVortex' function)
-# Example:
-# wake_length_rotations = [5, 10, 20, 30] # Equivalent to l = N_rotations * (2*b)
-# results_sensitivity_wake_length = {}
-# for wl in wake_length_rotations:
-#     # l_current = wl * (2*b)
-#     # HS_vortex_temp = HorseshoeVortex(l_current, U_wake[0], vor_fil, blade_seg, Omega[0], r_R)
-#     # HS_vortex_temp = CoordinateRotation(HS_vortex_temp, blade_seg, Nb)
-#     # results_sensitivity_wake_length[wl] = LiftingLineModel(HS_vortex_temp, CtrlPts, polar_alfa, polar_cl, polar_cd, Vinf, Omega[0], rho, b, r_R, chord_dist, twist_dist, Nb)
-
-# plt.figure(figsize=(10, 6))
-# for wl, res in results_sensitivity_wake_length.items():
-#     plt.plot(res['r'], res['CP'], 'o', label=f'Wake Length = {wl} Rotations') # Plotting total CP as a single point per run
-# plt.xlabel('Number of Rotations in Wake Length')
-# plt.ylabel('Total Power Coefficient (CP)')
-# plt.title('Sensitivity of Total CP to Wake Length and Convergence')
-# plt.grid(True)
-# plt.legend()
-# plt.tight_layout()
-# plt.show()
-# print("Discussion: (Explain how increasing wake length affects the solution, typically it converges after a certain length as the influence diminishes. Also discuss the convergence of the solution with wake length.)")
