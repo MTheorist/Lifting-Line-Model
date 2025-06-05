@@ -102,7 +102,6 @@ def CoordinateRotation(HS_vortex, blade_seg, Nb):
 
     for i in range(1, Nb):
         theta = ((2*np.pi)/Nb) * i    # angular position of blade element
-        # theta = np.deg2rad(np.range(60,300,))
         
         for j in range(blade_seg):
             HS_temp={}
@@ -124,10 +123,9 @@ def CoordinateRotation(HS_vortex, blade_seg, Nb):
 
             HS_vortex.append(HS_temp)
     
-    
     return HS_vortex
 
-def HorseshoeVortex(l, U_wake, vor_fil, blade_seg, Omega, r_R, Gamma, Nb, chord_dist, twist_dist):
+def HorseshoeVortex(l, U_wake, vor_fil, blade_seg, Omega, r_R, Gamma, Nb, chord_dist, twist_dist, b):
     T = l/U_wake        # total time for wake propagation [s]
     dt = T/vor_fil      # time for propagation of each vortex filament [s]    
     rot = False         # vortex filament rotation flag
@@ -160,16 +158,16 @@ def HorseshoeVortex(l, U_wake, vor_fil, blade_seg, Omega, r_R, Gamma, Nb, chord_
             # subsequent set of vortex filaments
             elif rot == True:
                 # left side of the trailing vortex
-                x = [U_wake*dt*(i+1)] # , (1.25*chord_dist[j]*np.cos(twist_dist[j]))+ U_wake*dt*i
-                y = [r_R[j]*b*np.cos(Omega*dt*(i+1))] # , r_R[j]*b*np.cos(Omega*dt*i)
-                z = [(r_R[j]*b*np.sin(Omega*dt*(i+1)))] # , (1.25*chord_dist[j]*np.sin(twist_dist[j]))+r_R[j]*b*np.sin(Omega*dt*i)
+                x = [U_wake*dt*(i+1)]
+                y = [r_R[j]*b*np.cos(Omega*dt*(i+1))]
+                z = [(r_R[j]*b*np.sin(Omega*dt*(i+1)))]
 
                 TR_left['VF'+str(vor_fil-i)] = {'pos1': [x[0], y[0], z[0]], 'pos2':TR_left['VF'+str((vor_fil+1)-i)]['pos1'], 'Gamma': Gamma[j]}
 
                 # right side of the trailing vortex
-                x = [U_wake*dt*(i+1)] # , (1.25*chord_dist[j+1]*np.cos(twist_dist[j+1]))+U_wake*dt*i
-                y = [r_R[j+1]*b*np.cos(Omega*dt*(i+1))] # , r_R[j+1]*b*np.cos(Omega*dt*i)
-                z = [(r_R[j+1]*b*np.sin(Omega*dt*(i+1)))] # , (1.25*chord_dist[j+1]*np.sin(twist_dist[j+1]))+r_R[j+1]*b*np.sin(Omega*dt*i)
+                x = [U_wake*dt*(i+1)]
+                y = [r_R[j+1]*b*np.cos(Omega*dt*(i+1))]
+                z = [(r_R[j+1]*b*np.sin(Omega*dt*(i+1)))]
 
                 TR_right['VF'+str((vor_fil+2)+i)] = {'pos1': TR_right['VF'+str((vor_fil+1)+i)]['pos2'], 'pos2':[x[0], y[0], z[0]], 'Gamma': Gamma[j]}
             
@@ -183,7 +181,7 @@ def HorseshoeVortex(l, U_wake, vor_fil, blade_seg, Omega, r_R, Gamma, Nb, chord_
 
     return HS_vortex
 
-def InducedVelocities(CtrlPts, pos1, pos2, gamma, tol=1e-5):
+def InducedVelocities(CtrlPts, pos1, pos2, gamma, tol=5e-6):
     """
     Function to calculate [u,v,w] induced by a vortex filament defined by [pos1, pos2] on a control point defined by CtrlPts.
     Input Arguments:-
@@ -204,7 +202,7 @@ def InducedVelocities(CtrlPts, pos1, pos2, gamma, tol=1e-5):
     r01 = (pos2[0]-pos1[0])*(CtrlPts[0]-pos1[0]) + (pos2[1]-pos1[1])*(CtrlPts[1]-pos1[1]) + (pos2[2]-pos1[2])*(CtrlPts[2]-pos1[2])
     r02 = (pos2[0]-pos1[0])*(CtrlPts[0]-pos2[0]) + (pos2[1]-pos1[1])*(CtrlPts[1]-pos2[1]) + (pos2[2]-pos1[2])*(CtrlPts[2]-pos2[2])
     
-    # use tol = 1e-6 if segmentation is 'lin'
+    # use tol = [1e-6, 5e-6] if segmentation is ['lin', 'cos']
     if r12sq < tol:
         r12sq = tol
 
@@ -232,76 +230,20 @@ def InfluenceCoeff(HS_vortex, CtrlPts, vor_fil, Nb):
             w_ind_t = 0
             
             for k in range(j, N_hs, N_cp):     # iterate for effect of j-th HS vortex existing over the k-th blade
-                # fil_neg1 = {'pos1': [], 'pos2': [], 'Gamma': 0}
-                # fil1 = {'pos1': [], 'pos2': [], 'Gamma': 0}
-                # if j != 0:
-                #     hs_neg1 = HS_vortex[k-1]
                 hs = HS_vortex[k]
-                # if j != (N_cp-1):
-                #     hs1 = HS_vortex[k+1]
-                vf_num = 0
+
                 for vf_key in hs:
-                    if vf_key != ('VF'+str(vor_fil+1)):
-                        # if j != 0:
-                        #     fil_neg1 = hs_neg1['VF'+str((2*vor_fil)+1-vf_num)]
-                        
-                        fil = hs[vf_key]
+                    fil = hs[vf_key]
 
-                        # if j != (N_cp-1):
-                        #     fil1 = hs1['VF'+str((2*vor_fil)+1-vf_num)]
-
-                        u_fil, v_fil, w_fil = InducedVelocities(CtrlPts[i]['CP'+str(i+1)], fil['pos1'], fil['pos2'], fil['Gamma'])
-                        
-                        # if fil['pos1'] == fil_neg1['pos2'] and fil['pos2'] == fil_neg1['pos1']:
-                        #     # print("hello from behind.")
-                        #     u_fil -= InducedVelocities(CtrlPts[i]['CP'+str(i+1)], fil_neg1['pos1'], fil_neg1['pos2'], fil_neg1['Gamma'])[0]
-                        #     v_fil -= InducedVelocities(CtrlPts[i]['CP'+str(i+1)], fil_neg1['pos1'], fil_neg1['pos2'], fil_neg1['Gamma'])[1]
-                        #     w_fil -= InducedVelocities(CtrlPts[i]['CP'+str(i+1)], fil_neg1['pos1'], fil_neg1['pos2'], fil_neg1['Gamma'])[2]
-                        # # else:
-                        # #     print("No overlap trailing vortex filament detected on the left side HS vortex.")
-                        
-                        # if fil['pos1'] == fil1['pos2'] and fil['pos2'] == fil1['pos1']:
-                        #     # print("hello from ahead.")
-                        #     u_fil -= InducedVelocities(CtrlPts[i]['CP'+str(i+1)], fil1['pos1'], fil1['pos2'], fil1['Gamma'])[0]
-                        #     v_fil -= InducedVelocities(CtrlPts[i]['CP'+str(i+1)], fil1['pos1'], fil1['pos2'], fil1['Gamma'])[1]
-                        #     w_fil -= InducedVelocities(CtrlPts[i]['CP'+str(i+1)], fil1['pos1'], fil1['pos2'], fil1['Gamma'])[2]
-                        # # else:
-                        # #     print("No overlap trailing vortex filament detected on the right side HS vortex.")
-                        
-                        u_ind_t += u_fil
-                        v_ind_t += v_fil
-                        w_ind_t += w_fil
-
-                        vf_num += 1
-
-                    else:    
-                        vf_num += 1
+                    u_fil, v_fil, w_fil = InducedVelocities(CtrlPts[i]['CP'+str(i+1)], fil['pos1'], fil['pos2'], fil['Gamma'])
+                    
+                    u_ind_t += u_fil
+                    v_ind_t += v_fil
+                    w_ind_t += w_fil
                 
             u_infl[i][j] = u_ind_t
             v_infl[i][j] = v_ind_t
             w_infl[i][j] = w_ind_t
-
-    # u_infl, v_infl, w_infl = CorrectOverlapVelocity(u_infl, v_infl, w_infl)
-
-    for i in range(N_cp):   # iterate for each collocation point
-        for j in range(N_cp):   # iterate for each HS vortex on that collocation point
-            u_ind_t = 0
-            v_ind_t = 0
-            w_ind_t = 0
-            
-            for k in range(j, N_hs, N_cp):     # iterate over HS vortex of each blade
-                hs = HS_vortex[k]
-                for vf_key in hs:
-                    if vf_key == ('VF'+str(vor_fil+1)):
-                        fil = hs[vf_key]
-                        u_fil, v_fil, w_fil = InducedVelocities(CtrlPts[i]['CP'+str(i+1)], fil['pos1'], fil['pos2'], fil['Gamma'])
-                        u_ind_t += u_fil
-                        v_ind_t += v_fil
-                        w_ind_t += w_fil
-     
-            u_infl[i][j] += u_ind_t
-            v_infl[i][j] += v_ind_t
-            w_infl[i][j] += w_ind_t
 
     return u_infl, v_infl, w_infl
 
@@ -315,12 +257,12 @@ def LiftingLineModel(HS_vortex, CtrlPts, polar_alfa, polar_cl, polar_cd, Vinf, O
 
     conv = 1e-6
     max_iter = 1000
-    relax = 0.2     # use 0.3 if segmentation is 'lin'
+    relax = 0.1     # use 0.3 if segmentation is 'lin'
     iter = 0
     error = 1e8
 
     while error>conv and iter<max_iter:
-        # print(gamma, iter)
+        print(gamma, iter)
 
         for i in range(N_cp):
             xp = CtrlPts[i]['CP'+str(i+1)][0]
@@ -335,26 +277,19 @@ def LiftingLineModel(HS_vortex, CtrlPts, polar_alfa, polar_cl, polar_cd, Vinf, O
             v_ind = np.dot(v_infl[i],gamma)
             w_ind = np.dot(w_infl[i],gamma)
 
-            print("--------------TEST-------------", np.array([u_ind, v_ind, w_ind]), iter)
-
-            azim_vec = np.cross([1/r_cp[i],0,0],[xp, yp, zp])
-            
             # Finding the local velocity components at the control points
             V_ax_local = Vinf + u_ind   
-            # V_tan_local = (Omega*yp) + np.dot(azim_vec,[V_ax_local, v_ind, w_ind])
+            
             V_tan_local = (Omega*r_cp[i]) + ((1/r_cp[i])*(-(v_ind*zp)+(w_ind*yp)))
             V_local_mag = np.sqrt((V_ax_local**2) + (V_tan_local**2))
-            # phi[i] = np.arctan2(V_ax_local,V_tan_local)
 
-            # V_tan_local = (Omega*yp) + w_ind
-            # V_local_mag = np.sqrt((V_ax_local**2) + (V_tan_local**2) + (v_ind)**2)
             phi[i] = np.arctan(V_ax_local/V_tan_local)
             
             # Finding the blade element properties
             r_R_local = (yp/b)
             chord_local = np.interp(r_R_local, r_R, chord_dist) * b
             twist_local = np.interp(r_R_local, r_R, twist_dist)
-            # print("LLM:", r_R_local, ":", twist_local)
+            
             alfa[i] = twist_local - np.rad2deg(phi[i])
 
             Cl_local = np.interp(alfa[i], polar_alfa, polar_cl)
@@ -379,13 +314,12 @@ def LiftingLineModel(HS_vortex, CtrlPts, polar_alfa, polar_cl, polar_cd, Vinf, O
             dCP[i] = (F_ax_l[i]*Nb*seg_len[i]*Vinf)/(rho*((Omega/(2*np.pi))**3)*(2*b)**5)
             
         a_avg = np.dot(a_ax_loc, (np.pi*((b*r_R[1:])**2-(b*r_R[:-1])**2)))/(np.pi*((b*r_R[N_cp])**2 - (b*r_R[0])**2))
-        # a_avg = np.sqrt(np.mean(np.square(a_ax_loc), axis=0))
         a_bem = (a_avg*relax) + ((1-relax)*a_bem)
 
         error = np.max(np.abs(gamma_new-gamma))
         if error>conv and iter<max_iter:
             gamma = (gamma_new*relax) + ((1-relax)*gamma)
-            HS_vortex = HorseshoeVortex(l, (Vinf*(1+a_bem)), vor_fil, N_cp, Omega, r_R, np.ones(N_cp), Nb, (chord_dist*b), np.deg2rad(twist_dist))
+            HS_vortex = HorseshoeVortex(l, (Vinf*(1+a_bem)), vor_fil, N_cp, Omega, r_R, np.ones(N_cp), Nb, (chord_dist*b), np.deg2rad(twist_dist), b)
             u_infl, v_infl, w_infl = InfluenceCoeff(HS_vortex, CtrlPts, vor_fil, Nb)
             iter += 1
         else:
@@ -475,7 +409,7 @@ CtrlPts, HS_vortex, results = [[] for i in range(3)]
 
 for i in range(len(U_wake)):
     CtrlPts.append(ControlPoint(r_R, b, blade_seg, chord_dist, np.deg2rad(twist_dist)))
-    HS_vortex.append(HorseshoeVortex(l, U_wake[i], vor_fil, blade_seg, Omega[i], r_R, np.ones(blade_seg), Nb, (chord_dist*b), np.deg2rad(twist_dist)))
+    HS_vortex.append(HorseshoeVortex(l, U_wake[i], vor_fil, blade_seg, Omega[i], r_R, np.ones(blade_seg), Nb, (chord_dist*b), np.deg2rad(twist_dist)), b)
    
     # Ensure that HS_vortex has been rotated if needed
     # HS_vortex = CoordinateRotation(HS_vortex, blade_seg, Nb)
