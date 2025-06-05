@@ -352,8 +352,8 @@ polar_cd = data1['cd'][:]
 rho = 1.007                     # density at h=2000m [kg/m^3]
 Pamb = 79495.22                 # static pressure at h=2000m [Pa]
 Vinf = 60                       # velocity [m/s]
-# J = np.array([1.6, 2.0, 2.4])   # advance ratio
-J = np.array([2.0])
+J = np.array([1.6, 2.0, 2.4])   # advance ratio
+# J = np.array([2.0])
 
 # Blade geometry
 Nb = 6                  # number of blades
@@ -365,16 +365,17 @@ pitch = 46              # blade pitch [deg]
 # Discretisation 
 blade_seg = 14      # no. of segments for the wing
 vor_fil = 100       # no. of vortex filaments
-l = 4*(2*b)        # length scale of the trailing vortices [m] (based on blade diameter)
-seg_type = 'lin'    # discretisation type- 'lin': linear | 'cos': cosine
-
-# Discretisation into blade elements
-r_R, chord_dist, twist_dist = BladeSegment(root_pos_R, tip_pos_R, pitch, (blade_seg+1), seg_type)
+l = 4*(2*b)         # length scale of the trailing vortices [m] (based on blade diameter)
+seg_type = 'cos'    # discretisation type- 'lin': linear | 'cos': cosine
 
 # Dependent variables 
 n = Vinf/(2*J*b)    # RPS [Hz]
 Omega = 2*np.pi*n   # Angular velocity [rad/s]
 TSR = np.pi/J       # tip speed ratio
+
+# Discretisation into blade elements for BEM
+r_R, chord_dist, twist_dist = BladeSegment(root_pos_R, tip_pos_R, pitch, 100, seg_type)
+radial_positions_bem = (r_R[:-1] + r_R[1:]) / 2 # Midpoint of each blade element
 
 # Iteration inputs
 tol = 1e-7  # convergence tolerance
@@ -407,13 +408,16 @@ U_wake = Vinf*(np.ones(len(a_avg))+a_avg)       # wake velocity [m/s]
 
 CtrlPts, HS_vortex, results = [[] for i in range(3)]
 
+# Discretisation into blade elements for LLM
+r_R, chord_dist, twist_dist = BladeSegment(root_pos_R, tip_pos_R, pitch, (blade_seg+1), seg_type)
+radial_positions_llm = (r_R[:-1] + r_R[1:]) / 2 # Radial positions from LLM control points
 # Solving Lifting Line Model
 
 for i in range(len(U_wake)):
     CtrlPts.append(ControlPoint(r_R, b, blade_seg, chord_dist, np.deg2rad(twist_dist)))
     HS_vortex.append(HorseshoeVortex(l, U_wake[i], vor_fil, blade_seg, Omega[i], r_R, np.ones(blade_seg), Nb, (chord_dist*b), np.deg2rad(twist_dist), b))
 
-    # results.append(LiftingLineModel(HS_vortex[i], CtrlPts[i], polar_alfa, polar_cl, polar_cd, Vinf, Omega[i], rho, b, r_R, chord_dist, twist_dist, Nb, l, U_wake[i], vor_fil, Gamma[i], a_avg[i], alfa[i]))
+    results.append(LiftingLineModel(HS_vortex[i], CtrlPts[i], polar_alfa, polar_cl, polar_cd, Vinf, Omega[i], rho, b, r_R, chord_dist, twist_dist, Nb, l, U_wake[i], vor_fil, Gamma[i], a_avg[i], alfa[i]))
 
     ### --------------------------------- PLOTTING ROUTINE ---------------------------------
     
@@ -450,83 +454,64 @@ for i in range(len(U_wake)):
     ax.set_title("Wake Model for $J$ = " + str(J[i]))
     ax.set_box_aspect([1, 0.5, 0.5])
     plt.tight_layout()
-    plt.show()
-    
-    radial_positions_bem = (r_R[:-1] + r_R[1:]) / 2 # Midpoint of each blade element
-    radial_positions_llm = (r_R[:-1] + r_R[1:]) / 2 # Radial positions from LLM control points
 
     # 1. Radial distribution of the angle of attack
     plt.figure("Radial distribution of ALFA at J = " + str(J[i]))
-    plt.plot(radial_positions_bem, alfa[i], label='BEM', marker='o')
-    plt.plot(radial_positions_llm, results[i]['alfa'], label='LLM', marker='o')
+    plt.plot(radial_positions_bem, alfa[i], label='BEM')
+    plt.plot(radial_positions_llm, results[i]['alfa'], label='LLM', marker='o', markersize = 2)
     plt.xlabel('$r/R$')
-    plt.ylabel('$\alpha$ (degrees)')
-    plt.title("title")
+    plt.ylabel('$\alpha$ [deg]')
+    plt.title("Radial distribution of $\\alpha$ at J = " + str(J[i]))
     plt.grid(True)
     plt.legend()
 
     # 2. Radial distribution of the inflow angle
-    plt.figure()
-    plt.plot(radial_positions_bem, np.rad2deg(phi[0]), label='BEM', marker='o')
-    plt.plot(radial_positions_llm, np.rad2deg(results[0]['phi']), label='LLM', marker='o')
-    plt.xlabel('Radial position (m)')
-    plt.ylabel('Inflow angle (degrees)')
-    plt.title('Radial Distribution of Inflow Angle')
+    plt.figure("Radial distribution of PHI at J = " + str(J[i]))
+    plt.plot(radial_positions_bem, np.rad2deg(phi[i]), label='BEM')
+    plt.plot(radial_positions_llm, np.rad2deg(results[0]['phi']), label='LLM', marker='o', markersize = 2)
+    plt.xlabel('$r/R$')
+    plt.ylabel('$\phi$ [deg]')
+    plt.title("Radial distribution of $\phi$ at J = " + str(J[i]))
     plt.grid(True)
     plt.legend()
-    plt.tight_layout()
-    plt.show()
 
     # 3. Radial distribution of the circulation (Gamma)
-    plt.figure(figsize=(10, 6))
-    # For BEM, Circulation (Gamma) = 0.5 * V_local * Cl * chord
-    # Gamma_bem = 0.5 * np.sqrt((Vinf*(1+a[0]))*2 + (Omega[0]*radial_positions_bem*(1-a_tan[0]))**2) * Cl[0] * chord[0]
-    plt.plot(radial_positions_bem, Gamma[0], label='BEM', marker='o')
-    # For LLM, Gamma is directly available in results['Gamma']
-    plt.plot(radial_positions_llm, results[0]['Gamma'], label='LLM', marker='o') # Assuming first 'blade_seg' elements of gamma correspond to the first blade
-    plt.xlabel('Radial position (m)')
-    plt.ylabel('Circulation (m^2/s)')
-    plt.title('Radial Distribution of Circulation')
+    plt.figure("Radial distribution of GAMMA at J = " + str(J[i]))
+    plt.plot(radial_positions_bem, Gamma[i], label='BEM')
+    plt.plot(radial_positions_llm, results[i]['Gamma'], label='LLM', marker='o', markersize = 2)
+    plt.xlabel('$r/R$')
+    plt.ylabel('$\Gamma$')
+    plt.title("Radial distribution of $\Gamma$ at J = " + str(J[i]))
     plt.grid(True)
     plt.legend()
-    plt.tight_layout()
-    plt.show()
 
     # 4. Radial distribution of the tangential/azimuthal load
-    plt.figure(figsize=(10, 6))
-    # F_tan is directly available from BEM
-    plt.plot(radial_positions_bem, a_tan[0], label='BEM', marker='o')
-    # F_tan is directly available from LLM
-    plt.plot(radial_positions_llm, results[0]['a_tan'], label='LLM', marker='o')
-    plt.xlabel('Radial position (m)')
-    plt.ylabel('Tangential Load (N/m)')
-    plt.title('Radial Distribution of Tangential Induction')
+    plt.figure("Radial distribution of FTAN at J = " + str(J[i]))
+    plt.plot(radial_positions_bem, F_tan[i], label='BEM')
+    plt.plot(radial_positions_llm, results[i]['F_tan'], label='LLM', marker='o', markersize = 2)
+    plt.xlabel('$r/R$')
+    plt.ylabel('$F_{tan}$')
+    plt.title("Radial distribution of $F_{tan}$ at J = " + str(J[i]))
     plt.grid(True)
     plt.legend()
-    plt.tight_layout()
-    plt.show()
 
     # 5. Radial distribution of the axial load
-    plt.figure(figsize=(10, 6))
-    # F_ax is directly available from BEM
-    plt.plot(radial_positions_bem, a[0], label='BEM', marker='o')
-    # F_ax is directly available from LLM
-    plt.plot(radial_positions_llm, results[0]['a_ax'], label='LLM', marker='o')
-    plt.xlabel('Radial position (m)')
-    plt.ylabel('Axial Load (N/m)')
-    plt.title('Radial Distribution of Axial Induction')
+    plt.figure("Radial distribution of FAX at J = " + str(J[i]))
+    plt.plot(radial_positions_bem, F_ax[i], label='BEM')
+    plt.plot(radial_positions_llm, results[i]['F_ax'], label='LLM', marker='o', markersize = 2)
+    plt.xlabel('$r/R$')
+    plt.ylabel('$F_{ax}$')
+    plt.title("Radial distribution of $F_{ax}$ at J = " + str(J[i]))
     plt.grid(True)
     plt.legend()
-    plt.tight_layout()
+
+    # 6. Total thrust coefficient (CT) and power coefficient (CP)
+    print(f"Total Thrust Coefficient (CT) for J={J[i]}:")
+    print(f"BEM: {CT[i]:.4f}")
+    print(f"LLM: {results[i]['CT']:.4f}")
+
+    print(f"\nTotal Power Coefficient (CP) for J={J[i]}:")
+    print(f"BEM: {CP[i]:.4f}")
+    print(f"LLM: {results[i]['CP']:.4f}")
+
     plt.show()
-
-# 6. Total thrust coefficient (CT) and power coefficient (CP)
-# Assuming J is an array and you want to plot CT/CP vs J or for a single J
-# For single J:
-print(f"Total Thrust Coefficient (CT) for J={J[0]}:")
-print(f"BEM: {CT[0]:.4f}")
-print(f"LLM: {results[0]['CT']:.4f}")
-
-print(f"\nTotal Power Coefficient (CP) for J={J[0]}:")
-print(f"BEM: {CP[0]:.4f}")
-print(f"LLM: {results[0]['CP']:.4f}")
