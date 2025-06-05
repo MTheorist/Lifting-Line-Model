@@ -7,6 +7,8 @@ from itertools import cycle
 
 plt.rc('text', usetex=True) 
 plt.rc('font', family='serif')
+plt.rcParams['axes.labelsize'] = 10
+plt.rcParams['axes.titlesize'] = 15
 
 os.chdir(os.path.dirname(__file__))
 
@@ -438,9 +440,9 @@ for i in range(len(U_wake)):
 
     results.append(LiftingLineModel(HS_vortex[i], CtrlPts[i], polar_alfa, polar_cl, polar_cd, Vinf, Omega[i], rho, b, r_R, chord_dist, twist_dist, Nb, l, U_wake[i], vor_fil, Gamma_init[i], a_avg[i], alfa[i]))
 
-    ### --------------------------------- PLOTTING ROUTINE ---------------------------------
+### --------------------------------- PLOTTING ROUTINE ---------------------------------
     
-    ## Per advance ratio, J
+## Per advance ratio, J
  
     # Wake Model
     fig = plt.figure("Wake Model for J = " + str(J[i]))
@@ -524,7 +526,27 @@ for i in range(len(U_wake)):
     plt.grid(True)
     plt.legend()
 
-    # 6. Total thrust coefficient (CT) and power coefficient (CP)
+    # 6. Radial distribution of the axial induction
+    plt.figure("Radial distribution of A at J = " + str(J[i]))
+    plt.plot(radial_positions_bem, a[i], label='BEM')
+    plt.plot(radial_positions_llm, results[i]['a_ax'], label='LLM', marker='o', markersize = 2)
+    plt.xlabel('$r/R$')
+    plt.ylabel('$Axial Induction, a_{ax}$')
+    plt.title("Radial distribution of $a_{ax}$ at J = " + str(J[i]))
+    plt.grid(True)
+    plt.legend()
+
+    # 7. Radial distribution of the tangential induction
+    plt.figure("Radial distribution of ATAN at J = " + str(J[i]))
+    plt.plot(radial_positions_bem, a_tan[i], label='BEM')
+    plt.plot(radial_positions_llm, results[i]['a_tan'], label='LLM', marker='o', markersize = 2)
+    plt.xlabel('$r/R$')
+    plt.ylabel('$Tangential Induction, a_{tan}$')
+    plt.title("Radial distribution of $a_{tan}$ at J = " + str(J[i]))
+    plt.grid(True)
+    plt.legend()
+
+    # 8. Total thrust coefficient (CT) and power coefficient (CP)
     print(f"Total Thrust Coefficient (CT) for J={J[i]}:")
     print(f"BEM: {CT[i]:.4f}")
     print(f"LLM: {results[i]['CT']:.4f}")
@@ -532,5 +554,74 @@ for i in range(len(U_wake)):
     print(f"\nTotal Power Coefficient (CP) for J={J[i]}:")
     print(f"BEM: {CP[i]:.4f}")
     print(f"LLM: {results[i]['CP']:.4f}")
+    
+    plt.show()
+
+## LLM plots at varying J
+
+for i in range(len(U_wake)):
+
+    # 1. Radial distribution of the angle of attack
+    plt.figure("Radial distribution of ALFA with varying J")
+    plt.plot(radial_positions_llm, results[i]['alfa'], label=('J = ' + str(J[i])), marker='o', markersize = 2)
+    plt.xlabel('$r/R$')
+    plt.ylabel('$\\alpha$ [deg]')
+    plt.title("Radial distribution of $\\alpha$")
+    plt.grid(True)
+    plt.legend()
+
+    # 2. Radial distribution of the inflow angle
+    plt.figure("Radial distribution of PHI with varying J")
+    plt.plot(radial_positions_llm, np.rad2deg(results[i]['phi']), label=('J = ' + str(J[i])), marker='o', markersize = 2)
+    plt.xlabel('$r/R$')
+    plt.ylabel('$\phi$ [deg]')
+    plt.title("Radial distribution of $\phi$ with varying J")
+    plt.grid(True)
+    plt.legend()
+
+    # 3. Radial distribution of the circulation (Gamma)
+    plt.figure("Radial distribution of GAMMA with varying J")
+    plt.plot(radial_positions_llm, results[i]['Gamma'], label=('J = ' + str(J[i])), marker='o', markersize = 2)
+    plt.xlabel('$r/R$')
+    plt.ylabel('$\Gamma$')
+    plt.title("Radial distribution of $\Gamma$ with vaying J")
+    plt.grid(True)
+    plt.legend()
+
+    # 4. Radial distribution of the tangential/azimuthal load
+    plt.figure("Radial distribution of FTAN with varying J")
+    plt.plot(radial_positions_llm, results[i]['F_tan'], label=('J = ' + str(J[i])), marker='o', markersize = 2)
+    plt.xlabel('$r/R$')
+    plt.ylabel('$F_{tan}$')
+    plt.title("Radial distribution of $F_{tan}$ with varying J")
+    plt.grid(True)
+    plt.legend()
+
+    # 5. Radial distribution of the axial load
+    plt.figure("Radial distribution of FAX with varying J")
+    plt.plot(radial_positions_llm, results[i]['F_ax'], label=('J = ' + str(J[i])), marker='o', markersize = 2)
+    plt.xlabel('$r/R$')
+    plt.ylabel('$F_{ax}$')
+    plt.title("Radial distribution of $F_{ax}$ with varying J")
+    plt.grid(True)
+    plt.legend()
+
+    # 6. Radial distribution of the axial induction
+    plt.figure("Radial distribution of A with varying J")
+    plt.plot(radial_positions_llm, results[i]['a_ax'], label=('J = ' + str(J[i])), marker='o', markersize = 2)
+    plt.xlabel('$r/R$')
+    plt.ylabel('$Axial Induction, a_{ax}$')
+    plt.title("Radial distribution of $a_{ax}$ with varying J")
+    plt.grid(True)
+    plt.legend()
+
+    # 7. Radial distribution of the tangential induction
+    plt.figure("Radial distribution of ATAN with varying J")
+    plt.plot(radial_positions_llm, results[i]['a_tan'], label=('J = ' + str(J[i])), marker='o', markersize = 2)
+    plt.xlabel('$r/R$')
+    plt.ylabel('$Tangential Induction, a_{tan}$')
+    plt.title("Radial distribution of $a_{tan}$ at J = " + str(J[i]))
+    plt.grid(True)
+    plt.legend()
 
     plt.show()
