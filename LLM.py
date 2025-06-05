@@ -487,7 +487,7 @@ for i in range(len(U_wake)):
     # 2. Radial distribution of the inflow angle
     plt.figure("Radial distribution of PHI at J = " + str(J[i]))
     plt.plot(radial_positions_bem, np.rad2deg(phi[i]), label='BEM')
-    plt.plot(radial_positions_llm, np.rad2deg(results[0]['phi']), label='LLM', marker='o', markersize = 2)
+    plt.plot(radial_positions_llm, np.rad2deg(results[i]['phi']), label='LLM', marker='o', markersize = 2)
     plt.xlabel('$r/R$')
     plt.ylabel('$\phi$ [deg]')
     plt.title("Radial distribution of $\phi$ at J = " + str(J[i]))
